@@ -38,3 +38,15 @@ where
     // notice that calling unwrap() is safe since we created the PathBuf from the pattern.
     Ok((root, &pattern[rest.to_str().unwrap().len()..]))
 }
+
+pub fn is_hidden<P>(path: P) -> bool
+where
+    P: AsRef<path::Path>,
+{
+    path.as_ref()
+        .file_name()
+        .unwrap_or_else(|| path.as_ref().as_os_str())
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
+}

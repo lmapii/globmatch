@@ -1,7 +1,14 @@
 use globset;
+use std::io;
 use std::path;
 
+// TODO: extend for utility functions for Vec of patterns and a common root path
+
+// TODO: resolve paths before matching with filter -> consolidate()
+// to ensure that patterns can be matched easier
+
 pub use crate::error::Error;
+pub use util::is_hidden;
 
 mod error;
 mod util;
@@ -24,21 +31,66 @@ impl<'a> Builder<'a> {
         self
     }
 
+    fn glob_matcher_for(&self, glob: &str) -> Result<globset::GlobMatcher, String> {
+        Ok(globset::GlobBuilder::new(glob)
+            .case_insensitive(self.case_insensitive)
+            .build()
+            .map_err(|err| format!("{}: {}", self.glob.to_string(), err.kind().to_string(),))?
+            .compile_matcher())
+    }
+
+    // TODO: document that this is an optimized builder
+    // this item moves relative paths into the root such that patterns can contain relative paths
+    // which would otherwise not be possible
     pub fn build<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
     where
         P: AsRef<path::Path>,
     {
         let (root, rest) = util::resolve_root(root, self.glob)
             .map_err(|err| format!("Root folder not found: {}", err))?;
-        let matcher = globset::GlobBuilder::new(rest)
-            .case_insensitive(self.case_insensitive)
-            .build()
-            .map_err(|err| format!("{}: {}", self.glob.to_string(), err.kind().to_string(),))?
-            .compile_matcher();
+        let matcher = self.glob_matcher_for(rest)?;
         Ok(Matcher {
             glob: self.glob,
             root,
             rest,
+            matcher,
+        })
+    }
+
+    pub fn build_raw<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
+    where
+        P: AsRef<path::Path>,
+    {
+        if !root.as_ref().exists() {
+            return Err(format!(
+                "Root folder not found: {}",
+                io::Error::from(io::ErrorKind::NotFound)
+            ));
+        }
+        let matcher = self.glob_matcher_for(self.glob)?;
+        Ok(Matcher {
+            glob: self.glob,
+            root: path::PathBuf::from(root.as_ref()),
+            rest: "",
+            matcher,
+        })
+    }
+
+    // for building globs - iterators won't work properly
+    pub fn build_glob(&self, strict: bool) -> Result<Matcher<'a, path::PathBuf>, String> {
+        match path::PathBuf::from(self.glob).components().next() {
+            None => Ok(()),
+            Some(_) if !strict => Ok(()),
+            Some(c) => match c {
+                path::Component::Normal(_) => Ok(()),
+                _ => Err("Absolute or relative paths are not allowed for raw globs"),
+            },
+        }?;
+        let matcher = self.glob_matcher_for(self.glob)?;
+        Ok(Matcher {
+            glob: self.glob,
+            root: path::PathBuf::from(""),
+            rest: "",
             matcher,
         })
     }
@@ -62,12 +114,12 @@ where
     type IntoIter = IterAll;
 
     fn into_iter(self) -> Self::IntoIter {
-        println!(
-            "matching {} -> {} (original {})",
-            self.root.as_ref().to_string_lossy(),
-            self.rest,
-            self.glob
-        );
+        // println!(
+        //     "matching {} -> {} (original {})",
+        //     self.root.as_ref().to_string_lossy(),
+        //     self.rest,
+        //     self.glob
+        // );
         IterAll::new(walkdir::WalkDir::new(self.root).into_iter(), self.matcher)
     }
 }
@@ -86,6 +138,10 @@ where
     pub fn rest(&self) -> &str {
         self.rest
     }
+    pub fn is_match(&self, p: P) -> bool {
+        self.matcher.is_match(p)
+    }
+    // TODO: can_iter() -> bool:false on empty root
 }
 
 pub struct IterAll {
@@ -108,7 +164,7 @@ impl Iterator for IterAll {
                 None => None,
                 Some(res) => match res {
                     Ok(dir) => {
-                        println!("IterAll: matching {}", dir.path().to_string_lossy());
+                        // println!("IterAll: matching {}", dir.path().to_string_lossy());
                         let p = path::PathBuf::from(dir.path());
                         if self.matcher.is_match(dir.path()) {
                             return Some(Ok(p));
@@ -124,67 +180,12 @@ impl Iterator for IterAll {
     }
 }
 
-impl IterAll {
-    pub fn filter_entry<P>(self, predicate: P) -> IterFilter<Self, P>
-    where
-        P: FnMut(&path::Path) -> bool,
-    {
-        IterFilter {
-            iter: self,
-            predicate,
-        }
-    }
-}
-
-// TODO: it is not possible to change the underlying iterator and thus use the filter_predicate
-// function of `walkdir`, but a similar pattern and recursive iterator can be implemented here.
-
-#[derive(Debug)]
-pub struct IterFilter<I, P> {
-    iter: I,
-    predicate: P,
-}
-
-impl<P> Iterator for IterFilter<IterAll, P>
-where
-    P: FnMut(&path::Path) -> bool,
-{
-    type Item = Result<path::PathBuf, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let entry = match self.iter.next() {
-                None => return None,
-                Some(result) => match result {
-                    Ok(v) => v,
-                    Err(err) => return Some(Err(From::from(err))),
-                },
-            };
-            if !(self.predicate)(&entry) {
-                continue;
-            }
-            return Some(Ok(entry));
-        }
-    }
-}
-
-impl<P> IterFilter<IterAll, P>
-where
-    P: FnMut(&path::Path) -> bool,
-{
-    pub fn filter_entry(self, predicate: P) -> IterFilter<Self, P> {
-        IterFilter {
-            iter: self,
-            predicate,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn builder_build() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "**/*.txt";
@@ -194,6 +195,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn builder_err() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "a[";
@@ -205,6 +207,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn match_all() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
@@ -225,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn match_filter() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
@@ -232,14 +236,8 @@ mod tests {
         let builder = Builder::new(pattern).build(root)?;
         let paths: Vec<_> = builder
             .into_iter()
-            .filter_entry(|p| !{
-                p.file_name()
-                    .unwrap_or_else(|| p.as_os_str())
-                    .to_str()
-                    .map(|s| s.starts_with("."))
-                    .unwrap_or(false)
-            })
             .flatten()
+            .filter(|p| !is_hidden(p))
             .collect();
 
         println!(
@@ -255,22 +253,18 @@ mod tests {
     }
 
     #[test]
-    fn match_filter_filter() -> Result<(), String> {
+    fn match_filter_glob() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
 
-        let builder = Builder::new(pattern).build(root)?;
-        let paths: Vec<_> = builder
+        let glob = Builder::new("/**/test-files/a/a[0]/**").build_glob(false)?;
+
+        let paths: Vec<_> = Builder::new(pattern)
+            .build(root)?
             .into_iter()
-            .filter_entry(|p| !{
-                p.file_name()
-                    .unwrap_or_else(|| p.as_os_str())
-                    .to_str()
-                    .map(|s| s.starts_with("."))
-                    .unwrap_or(false)
-            })
-            // .filter_entry(|q: &path::Path| true) // TODO: still doesn't work
             .flatten()
+            .filter(|p| !is_hidden(p))
+            .filter(|p| !glob.is_match(p.into()))
             .collect();
 
         println!(
@@ -281,7 +275,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(4, paths.len());
+        assert_eq!(2, paths.len());
         Ok(())
     }
 }
