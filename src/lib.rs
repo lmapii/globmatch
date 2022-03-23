@@ -8,7 +8,7 @@ use std::path;
 // to ensure that patterns can be matched easier
 
 pub use crate::error::Error;
-pub use util::is_hidden_path;
+pub use util::{is_hidden_filename, is_hidden_path};
 
 mod error;
 mod util;
@@ -164,12 +164,11 @@ impl Iterator for IterAll {
                 None => None,
                 Some(res) => match res {
                     Ok(dir) => {
-                        // println!("IterAll: matching {}", dir.path().to_string_lossy());
                         let p = path::PathBuf::from(dir.path());
                         if self.matcher.is_match(dir.path()) {
                             return Some(Ok(p));
                         }
-                        continue; // don't list files that didn't match'
+                        continue;
                     }
                     Err(err) => Some(Err(err.into())),
                 },
@@ -180,7 +179,56 @@ impl Iterator for IterAll {
     }
 }
 
-// TODO: implement filter_entry for more efficient pre-filtering.
+impl IterAll {
+    pub fn filter_entry<Q>(
+        self,
+        mut predicate: Q,
+    ) -> IterFilter<walkdir::IntoIter, impl FnMut(&walkdir::DirEntry) -> bool>
+    where
+        Q: FnMut(&path::Path) -> bool,
+    {
+        IterFilter {
+            iter: self.iter.filter_entry(move |entry| predicate(entry.path())),
+            matcher: self.matcher,
+        }
+    }
+}
+
+pub struct IterFilter<I, P>
+where
+    P: FnMut(&walkdir::DirEntry) -> bool,
+{
+    iter: walkdir::FilterEntry<I, P>,
+    matcher: globset::GlobMatcher,
+}
+
+impl<P> Iterator for IterFilter<walkdir::IntoIter, P>
+where
+    P: FnMut(&walkdir::DirEntry) -> bool,
+{
+    type Item = Result<path::PathBuf, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let entry = match self.iter.next() {
+                None => None,
+                Some(res) => match res {
+                    Ok(dir) => {
+                        // TODO: some way to have IterFilter iterate?
+                        if self.matcher.is_match(dir.path()) {
+                            return Some(Ok(path::PathBuf::from(dir.path())));
+                        }
+                        continue; // don't list files that didn't match'
+                    }
+                    Err(err) => Some(Err(err.into())),
+                },
+            };
+            return entry;
+        }
+    }
+}
+
+// TODO: implement filter_entry for MUCH more efficient pre-filtering.
 
 #[cfg(test)]
 mod tests {
@@ -227,10 +275,35 @@ mod tests {
     }
 
     #[test]
+    fn match_filter_entry() -> Result<(), String> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let pattern = "test-files/**/*.txt";
+
+        let builder = Builder::new(pattern).build(root)?;
+        let paths: Vec<_> = builder
+            .into_iter()
+            .filter_entry(|p| !is_hidden_filename(p))
+            .flatten()
+            .collect();
+
+        println!(
+            "paths \n{}",
+            paths
+                .iter()
+                .map(|p| format!("{}", p.to_string_lossy()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert_eq!(4, paths.len());
+        Ok(())
+    }
+
+    #[test]
     fn match_filter() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
 
+        // this is slower than filter_entry since it matches all hidden paths
         let builder = Builder::new(pattern).build(root)?;
         let paths: Vec<_> = builder
             .into_iter()

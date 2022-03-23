@@ -39,7 +39,7 @@ where
     Ok((root, &pattern[rest.to_str().unwrap().len()..]))
 }
 
-pub fn _is_hidden_filename<P>(path: P) -> bool
+pub fn is_hidden_filename<P>(path: P) -> bool
 where
     P: AsRef<path::Path>,
 {
