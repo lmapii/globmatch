@@ -4,9 +4,6 @@ use std::path;
 
 // TODO: extend for utility functions for Vec of patterns and a common root path
 
-// TODO: resolve paths before matching with filter -> consolidate()
-// to ensure that patterns can be matched easier
-
 pub use crate::error::Error;
 pub use util::{is_hidden_filename, is_hidden_path};
 
@@ -42,6 +39,9 @@ impl<'a> Builder<'a> {
     // TODO: document that this is an optimized builder
     // this item moves relative paths into the root such that patterns can contain relative paths
     // which would otherwise not be possible
+
+    // TODO: document: in case of doubt resolve yielded paths using consolidate()
+    // to ensure that patterns can be matched easier
     pub fn build<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
     where
         P: AsRef<path::Path>,
@@ -228,7 +228,7 @@ where
     }
 }
 
-// TODO: implement filter_entry for MUCH more efficient pre-filtering.
+// TODO: implement recursive filter_entry?
 
 #[cfg(test)]
 mod tests {
