@@ -125,78 +125,60 @@ impl Iterator for IterAll {
 }
 
 impl IterAll {
-    pub fn filter_entry<Q>(
-        self,
-        mut predicate: Q,
-    ) -> IterFilter<walkdir::IntoIter, impl FnMut(&walkdir::DirEntry) -> bool>
+    pub fn filter_entry<P>(self, predicate: P) -> IterFilter<Self, P>
     where
-        Q: FnMut(&path::Path) -> bool,
+        P: FnMut(&path::Path) -> bool,
     {
         IterFilter {
-            iter: self.iter.filter_entry(move |entry| predicate(entry.path())),
-            matcher: self.matcher,
+            iter: self,
+            predicate,
         }
     }
 }
 
-pub struct IterFilter<I, P>
-where
-    P: FnMut(&walkdir::DirEntry) -> bool,
-{
-    iter: walkdir::FilterEntry<I, P>,
-    matcher: globset::GlobMatcher,
+// TODO: it is not possible to change the underlying iterator and thus use the filter_predicate
+// function of `walkdir`, but a similar pattern and recursive iterator can be implemented here.
+
+#[derive(Debug)]
+pub struct IterFilter<I, P> {
+    iter: I,
+    predicate: P,
 }
 
-impl<P> Iterator for IterFilter<walkdir::IntoIter, P>
+impl<P> Iterator for IterFilter<IterAll, P>
 where
-    P: FnMut(&walkdir::DirEntry) -> bool,
+    P: FnMut(&path::Path) -> bool,
 {
     type Item = Result<path::PathBuf, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let entry = match self.iter.next() {
-                None => None,
-                Some(res) => match res {
-                    Ok(dir) => {
-                        // TODO: some way to have the original IterFilter iterate?
-                        println!("IterFilter: matching {}", dir.path().to_string_lossy());
-                        let p = path::PathBuf::from(dir.path());
-                        if self.matcher.is_match(dir.path()) {
-                            return Some(Ok(p));
-                        }
-                        continue; // don't list files that didn't match'
-                    }
-                    Err(err) => Some(Err(err.into())),
+                None => return None,
+                Some(result) => match result {
+                    Ok(v) => v,
+                    Err(err) => return Some(Err(From::from(err))),
                 },
             };
-            return entry;
+            if !(self.predicate)(&entry) {
+                continue;
+            }
+            return Some(Ok(entry));
         }
     }
 }
 
-// TODO: calling filter_entry twice won't work
-// impl<P> IterFilter<walkdir::IntoIter, P>
-// where
-//     P: FnMut(&walkdir::DirEntry) -> bool,
-// {
-//     pub fn filter_entry<Q>(
-//         self,
-//         mut predicate: Q,
-//     ) -> IterFilter<
-//         walkdir::FilterEntry<walkdir::IntoIter, impl FnMut(&walkdir::DirEntry) -> bool>,
-//         impl FnMut(&walkdir::DirEntry) -> bool,
-//     >
-//     where
-//         Q: FnMut(&path::Path) -> bool,
-//     {
-//         IterFilter {
-//             iter: self
-//                 .iter
-//                 .filter_entry(move |entry: &walkdir::DirEntry| predicate(entry.path())),
-//         }
-//     }
-// }
+impl<P> IterFilter<IterAll, P>
+where
+    P: FnMut(&path::Path) -> bool,
+{
+    pub fn filter_entry(self, predicate: P) -> IterFilter<Self, P> {
+        IterFilter {
+            iter: self,
+            predicate,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -257,14 +239,37 @@ mod tests {
                     .map(|s| s.starts_with("."))
                     .unwrap_or(false)
             })
-            // TODO: can't have filter_entry twice
-            // .filter_entry(|p| !{
-            //     p.file_name()
-            //         .unwrap_or_else(|| p.as_os_str())
-            //         .to_str()
-            //         .map(|s| s.starts_with("."))
-            //         .unwrap_or(false)
-            // })
+            .flatten()
+            .collect();
+
+        println!(
+            "paths \n{}",
+            paths
+                .iter()
+                .map(|p| format!("{}", p.to_string_lossy()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert_eq!(4, paths.len());
+        Ok(())
+    }
+
+    #[test]
+    fn match_filter_filter() -> Result<(), String> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let pattern = "test-files/**/*.txt";
+
+        let builder = Builder::new(pattern).build(root)?;
+        let paths: Vec<_> = builder
+            .into_iter()
+            .filter_entry(|p| !{
+                p.file_name()
+                    .unwrap_or_else(|| p.as_os_str())
+                    .to_str()
+                    .map(|s| s.starts_with("."))
+                    .unwrap_or(false)
+            })
+            // .filter_entry(|q: &path::Path| true) // TODO: still doesn't work
             .flatten()
             .collect();
 
