@@ -8,7 +8,7 @@ use std::path;
 // to ensure that patterns can be matched easier
 
 pub use crate::error::Error;
-pub use util::is_hidden;
+pub use util::is_hidden_path;
 
 mod error;
 mod util;
@@ -180,6 +180,8 @@ impl Iterator for IterAll {
     }
 }
 
+// TODO: implement filter_entry for more efficient pre-filtering.
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,7 +222,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(4, paths.len());
+        assert_eq!(4 + 2, paths.len());
         Ok(())
     }
 
@@ -233,7 +235,7 @@ mod tests {
         let paths: Vec<_> = builder
             .into_iter()
             .flatten()
-            .filter(|p| !is_hidden(p))
+            .filter(|p| !is_hidden_path(p))
             .collect();
 
         println!(
@@ -259,7 +261,7 @@ mod tests {
             .build(root)?
             .into_iter()
             .flatten()
-            .filter(|p| !is_hidden(p))
+            .filter(|p| !is_hidden_path(p))
             .filter(|p| !glob.is_match(p.into()))
             .collect();
 

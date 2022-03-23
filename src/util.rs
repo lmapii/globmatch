@@ -39,14 +39,45 @@ where
     Ok((root, &pattern[rest.to_str().unwrap().len()..]))
 }
 
-pub fn is_hidden<P>(path: P) -> bool
+pub fn _is_hidden_filename<P>(path: P) -> bool
 where
     P: AsRef<path::Path>,
 {
-    path.as_ref()
+    let is_hidden = path
+        .as_ref()
         .file_name()
         .unwrap_or_else(|| path.as_ref().as_os_str())
         .to_str()
         .map(|s| s.starts_with("."))
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    println!(
+        "check hidden: {} - {}",
+        path.as_ref().to_string_lossy(),
+        is_hidden
+    );
+    is_hidden
+}
+
+pub fn is_hidden_path<P>(path: P) -> bool
+where
+    P: AsRef<path::Path>,
+{
+    let has_hidden = path.as_ref().components().find_map(|c| {
+        match c
+            .as_os_str()
+            .to_str()
+            .map(|s| s.starts_with("."))
+            .unwrap_or(false)
+        {
+            true => Some(c),
+            _ => None,
+        }
+    });
+
+    let is_hidden = match has_hidden {
+        None => false,
+        _ => true,
+    };
+    is_hidden
 }
