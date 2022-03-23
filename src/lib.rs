@@ -185,7 +185,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
     fn builder_build() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "**/*.txt";
@@ -195,7 +194,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn builder_err() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "a[";
@@ -207,7 +205,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn match_all() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
@@ -228,7 +225,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn match_filter() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
