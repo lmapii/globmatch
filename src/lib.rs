@@ -5,32 +5,42 @@ use std::path;
 // TODO: extend for utility functions for Vec of patterns and a common root path
 
 pub use crate::error::Error;
-pub use util::{is_hidden_filename, is_hidden_path};
+pub use util::{is_hidden_entry, is_hidden_path};
 
 mod error;
 mod util;
 
 pub struct Builder<'a> {
     glob: &'a str,
-    case_insensitive: bool,
+    case_sensitive: bool,
 }
 
 impl<'a> Builder<'a> {
     pub fn new(glob: &'a str) -> Builder<'a> {
         Builder {
             glob,
-            case_insensitive: true,
+            case_sensitive: true,
         }
     }
 
-    pub fn case_insensitive(&mut self, yes: bool) -> &mut Builder<'a> {
-        self.case_insensitive = yes;
+    pub fn case_sensitive(&mut self, yes: bool) -> &mut Builder<'a> {
+        self.case_sensitive = yes;
         self
     }
 
+    // TODO: document that this turns it into an is an optimized builder
+    // this item moves relative paths into the root such that patterns can contain relative paths
+    // which would otherwise not be possible. this makes a 1:1 mapping for builder and glob,
+    // which in some cases makes matching less efficient (globs on the same root path)
+    // but since it is impossible to know which paths are actually part of this and for different
+    // sub-paths it is better than to have a far-off root path.
+    // TODO: document: in case of doubt resolve yielded paths using consolidate()
+    // to ensure that patterns can be matched easier
+
     fn glob_matcher_for(&self, glob: &str) -> Result<globset::GlobMatcher, String> {
         Ok(globset::GlobBuilder::new(glob)
-            .case_insensitive(self.case_insensitive)
+            .literal_separator(true)
+            .case_insensitive(!self.case_sensitive)
             .build()
             .map_err(|err| {
                 format!("'{}': {}", self.glob.to_string(), {
@@ -45,19 +55,14 @@ impl<'a> Builder<'a> {
             .compile_matcher())
     }
 
-    // TODO: document that this is an optimized builder
-    // this item moves relative paths into the root such that patterns can contain relative paths
-    // which would otherwise not be possible
-
-    // TODO: document: in case of doubt resolve yielded paths using consolidate()
-    // to ensure that patterns can be matched easier
     pub fn build<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
     where
         P: AsRef<path::Path>,
     {
         let (root, rest) = util::resolve_root(root, self.glob)
-            .map_err(|err| format!("Root folder not found: {}", err))?;
-        let matcher = self.glob_matcher_for(rest)?;
+            .map_err(|err| format!("Failed to resolve paths: {}", err))?;
+
+        let matcher = self.glob_matcher_for(&rest)?;
         Ok(Matcher {
             glob: self.glob,
             root,
@@ -66,27 +71,7 @@ impl<'a> Builder<'a> {
         })
     }
 
-    pub fn build_raw<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
-    where
-        P: AsRef<path::Path>,
-    {
-        if !root.as_ref().exists() {
-            return Err(format!(
-                "Root folder not found: {}",
-                io::Error::from(io::ErrorKind::NotFound)
-            ));
-        }
-        let matcher = self.glob_matcher_for(self.glob)?;
-        Ok(Matcher {
-            glob: self.glob,
-            root: path::PathBuf::from(root.as_ref()),
-            rest: "",
-            matcher,
-        })
-    }
-
-    // for building globs - iterators won't work properly
-    pub fn build_glob(&self, strict: bool) -> Result<Matcher<'a, path::PathBuf>, String> {
+    pub fn build_glob(&self, strict: bool) -> Result<Glob<'a>, String> {
         match path::PathBuf::from(self.glob).components().next() {
             None => Ok(()),
             Some(_) if !strict => Ok(()),
@@ -96,10 +81,8 @@ impl<'a> Builder<'a> {
             },
         }?;
         let matcher = self.glob_matcher_for(self.glob)?;
-        Ok(Matcher {
+        Ok(Glob {
             glob: self.glob,
-            root: path::PathBuf::from(""),
-            rest: "",
             matcher,
         })
     }
@@ -111,9 +94,19 @@ where
 {
     glob: &'a str, // original glob-pattern
     root: P,       // root path of a resolved pattern
-    rest: &'a str, // remaining pattern after root has been resolved
+    rest: String,  // remaining pattern after root has been resolved
     matcher: globset::GlobMatcher,
 }
+
+// impl<'a, P> Matcher<'a, P>
+// where
+//     P: AsRef<path::Path>,
+// {
+//     fn iter(&self) -> IterAll {
+//         // cannot implement since globset::GlobMatcher does not implement Copy
+//         IterAll::new(walkdir::WalkDir::new(&self.root).into_iter(), self.matcher)
+//     }
+// }
 
 impl<'a, P> IntoIterator for Matcher<'a, P>
 where
@@ -140,17 +133,37 @@ where
     pub fn glob(&self) -> &str {
         self.glob
     }
+
     pub fn root(&self) -> String {
         let path = path::PathBuf::from(self.root.as_ref());
         String::from(path.to_str().unwrap())
     }
+
     pub fn rest(&self) -> &str {
-        self.rest
+        &self.rest
     }
+
     pub fn is_match(&self, p: P) -> bool {
         self.matcher.is_match(p)
     }
-    // TODO: can_iter() -> bool:false on empty root
+}
+
+pub struct Glob<'a> {
+    glob: &'a str,
+    matcher: globset::GlobMatcher,
+}
+
+impl<'a> Glob<'a> {
+    pub fn glob(&self) -> &str {
+        self.glob
+    }
+
+    pub fn is_match<P>(&self, p: P) -> bool
+    where
+        P: AsRef<path::Path>,
+    {
+        self.matcher.is_match(p)
+    }
 }
 
 pub struct IterAll {
@@ -160,6 +173,7 @@ pub struct IterAll {
 
 impl IterAll {
     fn new(iter: walkdir::IntoIter, matcher: globset::GlobMatcher) -> IterAll {
+        println!("matcher: {:?}", matcher);
         IterAll { iter, matcher }
     }
 }
@@ -174,6 +188,7 @@ impl Iterator for IterAll {
                 Some(res) => match res {
                     Ok(dir) => {
                         let p = path::PathBuf::from(dir.path());
+                        println!("checking {:?}", p);
                         if self.matcher.is_match(dir.path()) {
                             return Some(Ok(p));
                         }
@@ -246,11 +261,82 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_path() {
+        let path = path::Path::new("");
+        assert!(!path.is_absolute());
+    }
+
+    #[test]
+    fn match_globset() {
+        // yes, it is on purpose that this is a simple list and not read from the test-files
+        let files = vec![
+            "/some/path/test-files/a",
+            "/some/path/test-files/a/a0",
+            "/some/path/test-files/a/a0/a0_0.txt",
+            "/some/path/test-files/a/a0/a0_1.txt",
+            "/some/path/test-files/a/a0/A0_3.txt",
+            "/some/path/test-files/a/a0/a0_2.md",
+            "/some/path/test-files/a/a1",
+            "/some/path/test-files/a/a1/a1_0.txt",
+            "/some/path/test-files/a/a2",
+            "/some/path/test-files/a/a2/a2_0.txt",
+            "/some/path/test-files/b/b_0.txt",
+        ];
+
+        // function declaration within function. yay this starts to feel like python :D
+        fn match_glob<'a>(f: &'a str, m: &globset::GlobMatcher) -> Option<&'a str> {
+            match m.is_match(f) {
+                true => Some(f.as_ref()),
+                false => None,
+            }
+        }
+
+        fn glob_for(
+            glob: &str,
+            case_sensitive: bool,
+        ) -> Result<globset::GlobMatcher, globset::Error> {
+            Ok(globset::GlobBuilder::new(glob)
+                .case_insensitive(!case_sensitive)
+                .backslash_escape(true)
+                .literal_separator(true)
+                .build()?
+                .compile_matcher())
+        }
+
+        fn test_for(glob: &str, len: usize, files: &Vec<&str>, case_sensitive: bool) {
+            let glob = glob_for(glob, case_sensitive).unwrap();
+            let matches = files
+                .iter()
+                .map(|f| match_glob(f, &glob))
+                .flatten()
+                .collect::<Vec<_>>();
+            println!(
+                "matches for {}:\n'{}'",
+                glob.glob(),
+                matches
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            assert_eq!(len, matches.len());
+        }
+
+        test_for("/test-files/**/*.txt", 0, &files, true);
+        test_for("test-files/**/*.txt", 0, &files, true);
+        test_for("**/test-files/**/*.txt", 6, &files, true);
+        test_for("**/test-files/**/a*.txt", 4, &files, true);
+        test_for("**/test-files/**/a*.txt", 5, &files, false);
+        test_for("**/test-files/a/a*/a*.txt", 5, &files, false);
+        test_for("**/test-files/a/a[01]/a*.txt", 4, &files, false);
+    }
+
+    #[test]
     fn builder_build() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "**/*.txt";
 
-        let _builder = Builder::new(pattern).case_insensitive(true).build(root)?;
+        let _builder = Builder::new(pattern).build(root)?;
         Ok(())
     }
 
@@ -266,22 +352,77 @@ mod tests {
     }
 
     #[test]
-    fn match_all() -> Result<(), String> {
-        let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/**/*.txt";
+    // #[should_panic]
+    fn match_absolute_pattern() -> Result<(), String> {
+        let root = format!("{}/test-files", env!("CARGO_MANIFEST_DIR"));
+        match Builder::new("/test-files/**/*.txt").build(root) {
+            Err(_) => Ok(()),
+            Ok(_) => Err("Expected failure".to_string()),
+        }
+    }
 
-        let builder = Builder::new(pattern).build(root)?;
+    /*
+    some helper functions for testing
+    */
+
+    fn collect_paths<P>(builder: Matcher<P>) -> Vec<path::PathBuf>
+    where
+        P: AsRef<path::Path>,
+    {
         let paths: Vec<_> = builder.into_iter().flatten().collect();
-
         println!(
-            "paths \n{}",
+            "paths:\n{}",
             paths
                 .iter()
                 .map(|p| format!("{}", p.to_string_lossy()))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(4 + 2, paths.len());
+        paths
+    }
+
+    fn collect_paths_and_assert<P>(builder: Matcher<P>, expected_len: usize)
+    where
+        P: AsRef<path::Path>,
+    {
+        let paths = collect_paths(builder);
+        assert_eq!(expected_len, paths.len());
+    }
+
+    #[test]
+    fn match_all() -> Result<(), String> {
+        // the following resolves to `<package-root>/test-files/**/*.txt` and therefore
+        // successfully matches all files
+        let builder = Builder::new("test-files/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
+        collect_paths_and_assert(builder, 6 + 2);
+        Ok(())
+    }
+
+    #[test]
+    fn match_flavours() -> Result<(), String> {
+        // TODO: continue here for different relative pattern styles
+        // TODO: for that the utils.rs function must be fixed. rest is not required, the glob is root + pattern
+        // the important part was only to figure out the root directory to start searching from
+        // TODO: the util function should simply check that there is no relative parts in the REMAINDER
+        // meaning in the actual path
+        // patterns can have no relative paths (after selectors) since it is possible to move out of the pattern
+        // and then there is a loop. (though the levels of back and forth could be checked).
+        Ok(())
+    }
+
+    #[test]
+    fn match_case() -> Result<(), String> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let pattern = "test-files/a/a0/a*.txt";
+
+        // default is case_sensitive(true)
+        let builder = Builder::new(pattern).build(root)?;
+        println!(
+            "working on root {} with glob {:?}",
+            builder.root(),
+            builder.rest()
+        );
+        collect_paths_and_assert(builder, 2);
         Ok(())
     }
 
@@ -293,7 +434,7 @@ mod tests {
         let builder = Builder::new(pattern).build(root)?;
         let paths: Vec<_> = builder
             .into_iter()
-            .filter_entry(|p| !is_hidden_filename(p))
+            .filter_entry(|p| !is_hidden_entry(p))
             .flatten()
             .collect();
 
@@ -305,7 +446,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(4, paths.len());
+        assert_eq!(5, paths.len());
         Ok(())
     }
 
@@ -330,7 +471,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(4, paths.len());
+        assert_eq!(5, paths.len());
         Ok(())
     }
 
@@ -346,7 +487,7 @@ mod tests {
             .into_iter()
             .flatten()
             .filter(|p| !is_hidden_path(p))
-            .filter(|p| !glob.is_match(p.into()))
+            .filter(|p| !glob.is_match(p))
             .collect();
 
         println!(
