@@ -32,7 +32,16 @@ impl<'a> Builder<'a> {
         Ok(globset::GlobBuilder::new(glob)
             .case_insensitive(self.case_insensitive)
             .build()
-            .map_err(|err| format!("{}: {}", self.glob.to_string(), err.kind().to_string(),))?
+            .map_err(|err| {
+                format!("'{}': {}", self.glob.to_string(), {
+                    let str = err.kind().to_string();
+                    let mut c = str.chars();
+                    match c.next() {
+                        None => String::from("Unknown error"),
+                        Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
+                    }
+                },)
+            })?
             .compile_matcher())
     }
 
@@ -187,6 +196,8 @@ impl IterAll {
     where
         Q: FnMut(&path::Path) -> bool,
     {
+        // TODO: instead of creating an IterFilter it should be possible to swap out the
+        // implementation and return an IterAll<walkdir::FilterEntry> ?
         IterFilter {
             iter: self.iter.filter_entry(move |entry| predicate(entry.path())),
             matcher: self.matcher,
