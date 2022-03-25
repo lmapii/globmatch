@@ -1,5 +1,4 @@
 use globset;
-use std::io;
 use std::path;
 
 // TODO: extend for utility functions for Vec of patterns and a common root path
@@ -61,8 +60,9 @@ impl<'a> Builder<'a> {
     {
         let (root, rest) = util::resolve_root(root, self.glob)
             .map_err(|err| format!("Failed to resolve paths: {}", err))?;
+        // TODO: handle empty pattern?
 
-        let matcher = self.glob_matcher_for(&rest)?;
+        let matcher = self.glob_matcher_for(rest)?;
         Ok(Matcher {
             glob: self.glob,
             root,
@@ -94,26 +94,16 @@ where
 {
     glob: &'a str, // original glob-pattern
     root: P,       // root path of a resolved pattern
-    rest: String,  // remaining pattern after root has been resolved
+    rest: &'a str, // remaining pattern after root has been resolved
     matcher: globset::GlobMatcher,
 }
-
-// impl<'a, P> Matcher<'a, P>
-// where
-//     P: AsRef<path::Path>,
-// {
-//     fn iter(&self) -> IterAll {
-//         // cannot implement since globset::GlobMatcher does not implement Copy
-//         IterAll::new(walkdir::WalkDir::new(&self.root).into_iter(), self.matcher)
-//     }
-// }
 
 impl<'a, P> IntoIterator for Matcher<'a, P>
 where
     P: AsRef<path::Path>,
 {
     type Item = Result<path::PathBuf, Error>;
-    type IntoIter = IterAll;
+    type IntoIter = IterAll<P>;
 
     fn into_iter(self) -> Self::IntoIter {
         // println!(
@@ -122,7 +112,12 @@ where
         //     self.rest,
         //     self.glob
         // );
-        IterAll::new(walkdir::WalkDir::new(self.root).into_iter(), self.matcher)
+        let walk_root = path::PathBuf::from(self.root.as_ref());
+        IterAll::new(
+            self.root,
+            walkdir::WalkDir::new(walk_root).into_iter(),
+            self.matcher,
+        )
     }
 }
 
@@ -140,7 +135,7 @@ where
     }
 
     pub fn rest(&self) -> &str {
-        &self.rest
+        self.rest
     }
 
     pub fn is_match(&self, p: P) -> bool {
@@ -166,90 +161,138 @@ impl<'a> Glob<'a> {
     }
 }
 
-pub struct IterAll {
+pub struct IterAll<P>
+where
+    P: AsRef<path::Path>,
+{
+    root: P,
     iter: walkdir::IntoIter,
     matcher: globset::GlobMatcher,
 }
 
-impl IterAll {
-    fn new(iter: walkdir::IntoIter, matcher: globset::GlobMatcher) -> IterAll {
+impl<P> IterAll<P>
+where
+    P: AsRef<path::Path>,
+{
+    fn new(root: P, iter: walkdir::IntoIter, matcher: globset::GlobMatcher) -> IterAll<P> {
         println!("matcher: {:?}", matcher);
-        IterAll { iter, matcher }
-    }
-}
-
-impl Iterator for IterAll {
-    type Item = Result<path::PathBuf, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let entry = match self.iter.next() {
-                None => None,
-                Some(res) => match res {
-                    Ok(dir) => {
-                        let p = path::PathBuf::from(dir.path());
-                        println!("checking {:?}", p);
-                        if self.matcher.is_match(dir.path()) {
-                            return Some(Ok(p));
-                        }
-                        continue;
-                    }
-                    Err(err) => Some(Err(err.into())),
-                },
-            };
-            return entry;
-            //return Some(Ok((dent, is_match)));
+        IterAll {
+            root,
+            iter,
+            matcher,
         }
     }
 }
 
-impl IterAll {
-    pub fn filter_entry<Q>(
+fn match_path<P>(
+    root: P,
+    next: Option<Result<walkdir::DirEntry, walkdir::Error>>,
+    matcher: &globset::GlobMatcher,
+) -> Option<Option<Result<path::PathBuf, Error>>>
+where
+    P: AsRef<path::Path>,
+{
+    match next {
+        None => Some(None),
+        Some(res) => match res {
+            Ok(dir) => {
+                // assuming that walkdir doesn't create any paths that do not have the provided
+                // prefix we can simply exclude such paths since matching on them will anyhow
+                // be impossible
+                let p = dir.path().strip_prefix(root).ok()?;
+                println!("checking {:?}", p);
+
+                if matcher.is_match(dir.path()) {
+                    return Some(Some(Ok(path::PathBuf::from(dir.path()))));
+                }
+                return None; // iterator should continue
+            }
+            Err(err) => Some(Some(Err(err.into()))),
+        },
+    }
+}
+
+impl<P> Iterator for IterAll<P>
+where
+    P: AsRef<path::Path>,
+{
+    type Item = Result<path::PathBuf, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match match_path(&self.root, self.iter.next(), &self.matcher) {
+                None => continue,
+                Some(entry) => {
+                    return entry;
+                }
+            };
+
+            // let entry = match self.iter.next() {
+            //     None => None,
+            //     Some(res) => match res {
+            //         Ok(dir) => {
+            //             let p = dir.path().strip_prefix(&self.root).unwrap();
+            //             println!("checking {:?}", p);
+
+            //             if self.matcher.is_match(dir.path()) {
+            //                 return Some(Ok(path::PathBuf::from(dir.path())));
+            //             }
+            //             continue;
+            //         }
+            //         Err(err) => Some(Err(err.into())),
+            //     },
+            // };
+            // return entry;
+        }
+    }
+}
+
+impl<P> IterAll<P>
+where
+    P: AsRef<path::Path>,
+{
+    pub fn filter_entry<PrePath>(
         self,
-        mut predicate: Q,
-    ) -> IterFilter<walkdir::IntoIter, impl FnMut(&walkdir::DirEntry) -> bool>
+        mut predicate: PrePath,
+    ) -> IterFilter<walkdir::IntoIter, P, impl FnMut(&walkdir::DirEntry) -> bool>
     where
-        Q: FnMut(&path::Path) -> bool,
+        PrePath: FnMut(&path::Path) -> bool,
     {
         // TODO: instead of creating an IterFilter it should be possible to swap out the
         // implementation and return an IterAll<walkdir::FilterEntry> ?
         IterFilter {
+            root: self.root,
             iter: self.iter.filter_entry(move |entry| predicate(entry.path())),
             matcher: self.matcher,
         }
     }
 }
 
-pub struct IterFilter<I, P>
+pub struct IterFilter<I, P, PreDir>
 where
-    P: FnMut(&walkdir::DirEntry) -> bool,
+    PreDir: FnMut(&walkdir::DirEntry) -> bool,
+    P: AsRef<path::Path>,
 {
-    iter: walkdir::FilterEntry<I, P>,
+    root: P,
+    iter: walkdir::FilterEntry<I, PreDir>,
     matcher: globset::GlobMatcher,
 }
 
-impl<P> Iterator for IterFilter<walkdir::IntoIter, P>
+impl<PreDir, P> Iterator for IterFilter<walkdir::IntoIter, P, PreDir>
 where
-    P: FnMut(&walkdir::DirEntry) -> bool,
+    PreDir: FnMut(&walkdir::DirEntry) -> bool,
+    P: AsRef<path::Path>,
 {
     type Item = Result<path::PathBuf, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let entry = match self.iter.next() {
-                None => None,
-                Some(res) => match res {
-                    Ok(dir) => {
-                        // TODO: some way to have IterFilter iterate?
-                        if self.matcher.is_match(dir.path()) {
-                            return Some(Ok(path::PathBuf::from(dir.path())));
-                        }
-                        continue; // don't list files that didn't match'
-                    }
-                    Err(err) => Some(Err(err.into())),
-                },
+            match match_path(&self.root, self.iter.next(), &self.matcher) {
+                None => continue,
+                Some(entry) => {
+                    return entry;
+                }
             };
-            return entry;
         }
     }
 }
@@ -329,6 +372,9 @@ mod tests {
         test_for("**/test-files/**/a*.txt", 5, &files, false);
         test_for("**/test-files/a/a*/a*.txt", 5, &files, false);
         test_for("**/test-files/a/a[01]/a*.txt", 4, &files, false);
+
+        // TODO: this is important, an empty pattern does not match anything
+        test_for("", 6, &files, false);
     }
 
     #[test]
