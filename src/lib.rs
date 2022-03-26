@@ -2,6 +2,7 @@ use globset;
 use std::path;
 
 // TODO: extend for utility functions for Vec of patterns and a common root path
+// TODO: rust serde convention - The message should not be capitalized and should not end with a period.
 
 pub use crate::error::Error;
 pub use util::{is_hidden_entry, is_hidden_path};
@@ -58,9 +59,9 @@ impl<'a> Builder<'a> {
     where
         P: AsRef<path::Path>,
     {
+        // notice that resolve_root doesnot return empty patterns
         let (root, rest) = util::resolve_root(root, self.glob)
             .map_err(|err| format!("Failed to resolve paths: {}", err))?;
-        // TODO: handle empty pattern?
 
         let matcher = self.glob_matcher_for(rest)?;
         Ok(Matcher {
@@ -184,7 +185,7 @@ where
     }
 }
 
-fn match_path<P>(
+fn match_next<P>(
     root: P,
     next: Option<Result<walkdir::DirEntry, walkdir::Error>>,
     matcher: &globset::GlobMatcher,
@@ -202,7 +203,7 @@ where
                 let p = dir.path().strip_prefix(root).ok()?;
                 println!("checking {:?}", p);
 
-                if matcher.is_match(dir.path()) {
+                if matcher.is_match(p) {
                     return Some(Some(Ok(path::PathBuf::from(dir.path()))));
                 }
                 return None; // iterator should continue
@@ -220,7 +221,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match match_path(&self.root, self.iter.next(), &self.matcher) {
+            match match_next(&self.root, self.iter.next(), &self.matcher) {
                 None => continue,
                 Some(entry) => {
                     return entry;
@@ -287,7 +288,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match match_path(&self.root, self.iter.next(), &self.matcher) {
+            match match_next(&self.root, self.iter.next(), &self.matcher) {
                 None => continue,
                 Some(entry) => {
                     return entry;
@@ -373,8 +374,8 @@ mod tests {
         test_for("**/test-files/a/a*/a*.txt", 5, &files, false);
         test_for("**/test-files/a/a[01]/a*.txt", 4, &files, false);
 
-        // TODO: this is important, an empty pattern does not match anything
-        test_for("", 6, &files, false);
+        // this is important, an empty pattern does not match anything
+        test_for("", 0, &files, false);
     }
 
     #[test]
@@ -459,7 +460,7 @@ mod tests {
     #[test]
     fn match_case() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/a/a0/a*.txt";
+        let pattern = "test-files/a/a?/a*.txt";
 
         // default is case_sensitive(true)
         let builder = Builder::new(pattern).build(root)?;
@@ -468,7 +469,7 @@ mod tests {
             builder.root(),
             builder.rest()
         );
-        collect_paths_and_assert(builder, 2);
+        collect_paths_and_assert(builder, 4);
         Ok(())
     }
 
@@ -492,7 +493,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(5, paths.len());
+        assert_eq!(6, paths.len());
         Ok(())
     }
 
@@ -517,7 +518,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(5, paths.len());
+        assert_eq!(6, paths.len());
         Ok(())
     }
 
@@ -544,7 +545,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(2, paths.len());
+        assert_eq!(3, paths.len());
         Ok(())
     }
 }

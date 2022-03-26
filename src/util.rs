@@ -45,6 +45,7 @@ where
     path::Path::new(pattern).components().for_each(|c| {
         if push_root {
             root.push(c);
+            println!("  {:?}", root);
 
             // notice that a path exists even if the number of "../" is beyond the root.
             // thus all superfluous "../" will simply be consumed by this iterator.
@@ -58,6 +59,21 @@ where
         }
     });
 
+    // Workaround for empty patterns: Keep the path component within the pattern such that
+    // it will be matched. globset is not able to match empty patterns.
+    if rest.components().count() == 0 {
+        if let Some(c) = root.components().next_back() {
+            match c {
+                path::Component::Normal(_) => {
+                    rest.push(c);
+                    root.pop();
+                }
+                _ => (),
+            }
+        }
+    }
+
+    let root = root.canonicalize()?;
     println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
 
     if let Some(_) = rest.components().find(|c| match c {
@@ -126,7 +142,7 @@ mod tests {
     // use super::*;
 
     use super::resolve_root;
-    use std::path;
+    use std::{io, path};
 
     #[test]
     /// This test just demonstrates that this crate "gracefully" handles relative paths that
@@ -139,17 +155,51 @@ mod tests {
         let pattern = levels.join("") + "*.txt";
 
         let (root, rest) = resolve_root(root, pattern.as_str())?;
-        println!("root-rest {:?}  {:?}", root.canonicalize(), rest);
+        let root = root.to_str().ok_or(io::Error::from(io::ErrorKind::Other))?;
+
+        assert_eq!(root, "/");
+        assert_eq!(rest, "*.txt");
         Ok(())
     }
 
     #[test]
-    fn dummy_b() -> Result<(), std::io::Error> {
-        let root = format!("{}{}", env!("CARGO_MANIFEST_DIR"), "/test-files/a");
-        let pattern = "../../../../../../../../../../../*.txt";
+    fn patterns() -> Result<(), String> {
+        fn tst(root: &str, pattern: &str, exp_root: &str, exp_pattern: &str) -> Result<(), String> {
+            let root = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), root);
 
-        let (root, rest) = resolve_root(root, pattern)?;
-        println!("root-rest {:?}  {:?}", root.canonicalize(), rest);
+            let (root, pattern) = resolve_root(root, pattern).map_err(|err| err.to_string())?;
+
+            let root = root
+                .to_str()
+                .ok_or(io::Error::from(io::ErrorKind::Other))
+                .map_err(|err| err.to_string())?;
+
+            let exp_root = format!(
+                "{}{}",
+                env!("CARGO_MANIFEST_DIR"),
+                match exp_root {
+                    "" => "".to_string(),
+                    p => format!("/{}", p),
+                }
+            );
+
+            assert_eq!(root, exp_root);
+            assert_eq!(pattern, exp_pattern);
+            Ok(())
+        }
+        // notice how a relative path can result in an empty pattern, workaround implemented!
+        // err(tst("test-files", "../test-files", "test-files", ""))?;
+        tst("test-files/a", "../a", "test-files", "a")?;
+
+        tst("test-files", "*.txt", "test-files", "*.txt")?;
+        tst("test-files/a/a0", "../../../*.txt", "", "*.txt")?;
+        tst("test-files/a/a0", "a0_0.txt", "test-files/a/a0", "a0_0.txt")?;
+        tst(
+            "test-files/a/a0",
+            "../a0/a0_0.txt",
+            "test-files/a/a0",
+            "a0_0.txt",
+        )?;
         Ok(())
     }
 }
