@@ -34,8 +34,6 @@ impl<'a> Builder<'a> {
     // which in some cases makes matching less efficient (globs on the same root path)
     // but since it is impossible to know which paths are actually part of this and for different
     // sub-paths it is better than to have a far-off root path.
-    // TODO: document: in case of doubt resolve yielded paths using consolidate()
-    // to ensure that patterns can be matched easier
 
     fn glob_matcher_for(&self, glob: &str) -> Result<globset::GlobMatcher, String> {
         Ok(globset::GlobBuilder::new(glob)
@@ -43,14 +41,11 @@ impl<'a> Builder<'a> {
             .case_insensitive(!self.case_sensitive)
             .build()
             .map_err(|err| {
-                format!("'{}': {}", self.glob.to_string(), {
-                    let str = err.kind().to_string();
-                    let mut c = str.chars();
-                    match c.next() {
-                        None => String::from("Unknown error"),
-                        Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
-                    }
-                },)
+                format!(
+                    "'{}': {}",
+                    self.glob.to_string(),
+                    util::to_upper(err.kind().to_string())
+                )
             })?
             .compile_matcher())
     }
@@ -60,8 +55,12 @@ impl<'a> Builder<'a> {
         P: AsRef<path::Path>,
     {
         // notice that resolve_root doesnot return empty patterns
-        let (root, rest) = util::resolve_root(root, self.glob)
-            .map_err(|err| format!("Failed to resolve paths: {}", err))?;
+        let (root, rest) = util::resolve_root(root, self.glob).map_err(|err| {
+            format!(
+                "'Failed to resolve paths': {}",
+                util::to_upper(err.to_string())
+            )
+        })?;
 
         let matcher = self.glob_matcher_for(rest)?;
         Ok(Matcher {
@@ -72,6 +71,8 @@ impl<'a> Builder<'a> {
         })
     }
 
+    // TODO: remove strict since we already consolidate the paths ? but we should not do that
+    // since then we cannot glob against relative paths anymore ...
     pub fn build_glob(&self, strict: bool) -> Result<Glob<'a>, String> {
         match path::PathBuf::from(self.glob).components().next() {
             None => Ok(()),
@@ -441,7 +442,7 @@ mod tests {
         // the following resolves to `<package-root>/test-files/**/*.txt` and therefore
         // successfully matches all files
         let builder = Builder::new("test-files/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
-        collect_paths_and_assert(builder, 6 + 2);
+        collect_paths_and_assert(builder, 6 + 1 + 2);
         Ok(())
     }
 
@@ -493,7 +494,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(6, paths.len());
+        assert_eq!(6 + 1, paths.len());
         Ok(())
     }
 
@@ -518,7 +519,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        assert_eq!(6, paths.len());
+        assert_eq!(6 + 1, paths.len());
         Ok(())
     }
 
@@ -527,14 +528,14 @@ mod tests {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
 
-        let glob = Builder::new("/**/test-files/a/a[0]/**").build_glob(false)?;
+        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob(false)?;
 
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
             .flatten()
             .filter(|p| !is_hidden_path(p))
-            .filter(|p| !glob.is_match(p))
+            .filter(|p| glob.is_match(p))
             .collect();
 
         println!(
@@ -548,4 +549,42 @@ mod tests {
         assert_eq!(3, paths.len());
         Ok(())
     }
+
+    #[test]
+    fn match_filter_glob_files() -> Result<(), String> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let pattern = "test-files/**/*.*";
+
+        // TODO: build_glob should create a ["**/pattern", "pattern"] glob such that the user
+        // doesn't have to specify both, then using *.txt as a pattern would work.
+        let glob = Builder::new("**/*.txt").build_glob(false)?;
+
+        let paths: Vec<_> = Builder::new(pattern)
+            .build(root)?
+            .into_iter()
+            .filter_entry(|e| !is_hidden_entry(e))
+            .flatten()
+            .filter(|p| {
+                let is_match = glob.is_match(p);
+                println!("do-filter: {:?} - {}", p, is_match);
+                is_match
+            })
+            .collect();
+
+        println!(
+            "paths \n{}",
+            paths
+                .iter()
+                .map(|p| format!("{}", p.to_string_lossy()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert_eq!(6 + 1, paths.len());
+        Ok(())
+    }
 }
+
+// TODO: checkout coverage
+// https://github.com/mozilla/grcov
+// https://marco-c.github.io/2020/11/24/rust-source-based-code-coverage.html
+// https://github.com/marco-c/rust-code-coverage-sample/blob/main/run_gcov.sh

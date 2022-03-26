@@ -20,7 +20,7 @@ where
     let mut rest = path::PathBuf::new();
 
     if pattern.len() == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Empty pattern"));
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty pattern"));
     }
 
     if !root.as_path().exists() {
@@ -73,7 +73,9 @@ where
         }
     }
 
-    let root = root.canonicalize()?;
+    // do not canonicalize the root directory, the user can decide to do this. otherwise
+    // matching against patterns that also use relative paths will be impossible.
+    // let root = root.canonicalize()?;
     println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
 
     if let Some(_) = rest.components().find(|c| match c {
@@ -83,7 +85,7 @@ where
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
-                "Pattern remainder '{}' contains unresolved relative path components",
+                "pattern remainder '{}' contains unresolved relative path components",
                 rest.to_str().unwrap()
             ),
         ));
@@ -92,6 +94,14 @@ where
     // notice that calling unwrap() is safe since we created the PathBuf from the pattern,
     let rest = &pattern[pattern.len() - rest.to_str().unwrap().len()..];
     Ok((root, rest))
+}
+
+pub(crate) fn to_upper(s: String) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => s,
+        Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
+    }
 }
 
 pub fn is_hidden_entry<P>(path: P) -> bool
@@ -155,6 +165,7 @@ mod tests {
         let pattern = levels.join("") + "*.txt";
 
         let (root, rest) = resolve_root(root, pattern.as_str())?;
+        let root = root.canonicalize()?;
         let root = root.to_str().ok_or(io::Error::from(io::ErrorKind::Other))?;
 
         assert_eq!(root, "/");
@@ -169,6 +180,7 @@ mod tests {
 
             let (root, pattern) = resolve_root(root, pattern).map_err(|err| err.to_string())?;
 
+            let root = root.canonicalize().map_err(|err| err.to_string())?;
             let root = root
                 .to_str()
                 .ok_or(io::Error::from(io::ErrorKind::Other))

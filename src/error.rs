@@ -35,7 +35,6 @@ impl From<walkdir::Error> for Error {
             }
             return Error(format!("{}: Unknown error occurred", common));
         }
-        // TODO: walk over entries that have no associated path
         Error(format!("<unknown-path>: Unknown error occurred"))
     }
 }
