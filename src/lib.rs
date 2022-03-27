@@ -35,7 +35,7 @@ impl<'a> Builder<'a> {
     // but since it is impossible to know which paths are actually part of this and for different
     // sub-paths it is better than to have a far-off root path.
 
-    fn glob_matcher_for(&self, glob: &str) -> Result<globset::GlobMatcher, String> {
+    fn glob_for(&self, glob: &str) -> Result<globset::Glob, String> {
         Ok(globset::GlobBuilder::new(glob)
             .literal_separator(true)
             .case_insensitive(!self.case_sensitive)
@@ -46,8 +46,7 @@ impl<'a> Builder<'a> {
                     self.glob.to_string(),
                     util::to_upper(err.kind().to_string())
                 )
-            })?
-            .compile_matcher())
+            })?)
     }
 
     pub fn build<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
@@ -62,7 +61,7 @@ impl<'a> Builder<'a> {
             )
         })?;
 
-        let matcher = self.glob_matcher_for(rest)?;
+        let matcher = self.glob_for(rest)?.compile_matcher();
         Ok(Matcher {
             glob: self.glob,
             root,
@@ -71,19 +70,39 @@ impl<'a> Builder<'a> {
         })
     }
 
-    // TODO: remove strict since we already consolidate the paths ? but we should not do that
-    // since then we cannot glob against relative paths anymore ...
-    pub fn build_glob(&self, strict: bool) -> Result<Glob<'a>, String> {
-        match path::PathBuf::from(self.glob).components().next() {
-            None => Ok(()),
-            Some(_) if !strict => Ok(()),
-            Some(c) => match c {
-                path::Component::Normal(_) => Ok(()),
-                _ => Err("Absolute or relative paths are not allowed for raw globs"),
-            },
-        }?;
-        let matcher = self.glob_matcher_for(self.glob)?;
+    pub fn build_glob_raw(&self) -> Result<Glob<'a>, String> {
+        let matcher = self.glob_for(self.glob)?.compile_matcher();
         Ok(Glob {
+            glob: self.glob,
+            matcher,
+        })
+    }
+
+    pub fn build_glob(&self) -> Result<GlobSet<'a>, String> {
+        if self.glob.len() == 0 {
+            return Err("Empty glob".to_string());
+        }
+
+        let p = path::Path::new(self.glob);
+        if p.is_absolute() {
+            return Err(format!("{}' is an absolute path", self.glob));
+        }
+
+        let glob_sub = "**/".to_string() + self.glob;
+
+        let matcher = globset::GlobSetBuilder::new()
+            .add(self.glob_for(self.glob)?)
+            .add(self.glob_for(&glob_sub)?)
+            .build()
+            .map_err(|err| {
+                format!(
+                    "'{}': {}",
+                    self.glob.to_string(),
+                    util::to_upper(err.kind().to_string())
+                )
+            })?;
+
+        Ok(GlobSet {
             glob: self.glob,
             matcher,
         })
@@ -147,10 +166,28 @@ where
 
 pub struct Glob<'a> {
     glob: &'a str,
-    matcher: globset::GlobMatcher,
+    pub matcher: globset::GlobMatcher,
 }
 
 impl<'a> Glob<'a> {
+    pub fn glob(&self) -> &str {
+        self.glob
+    }
+
+    pub fn is_match<P>(&self, p: P) -> bool
+    where
+        P: AsRef<path::Path>,
+    {
+        self.matcher.is_match(p)
+    }
+}
+
+pub struct GlobSet<'a> {
+    glob: &'a str,
+    pub matcher: globset::GlobSet,
+}
+
+impl<'a> GlobSet<'a> {
     pub fn glob(&self) -> &str {
         self.glob
     }
@@ -228,23 +265,6 @@ where
                     return entry;
                 }
             };
-
-            // let entry = match self.iter.next() {
-            //     None => None,
-            //     Some(res) => match res {
-            //         Ok(dir) => {
-            //             let p = dir.path().strip_prefix(&self.root).unwrap();
-            //             println!("checking {:?}", p);
-
-            //             if self.matcher.is_match(dir.path()) {
-            //                 return Some(Ok(path::PathBuf::from(dir.path())));
-            //             }
-            //             continue;
-            //         }
-            //         Err(err) => Some(Err(err.into())),
-            //     },
-            // };
-            // return entry;
         }
     }
 }
@@ -413,27 +433,25 @@ mod tests {
     some helper functions for testing
     */
 
-    fn collect_paths<P>(builder: Matcher<P>) -> Vec<path::PathBuf>
+    fn log_paths<P>(paths: &Vec<P>)
     where
         P: AsRef<path::Path>,
     {
-        let paths: Vec<_> = builder.into_iter().flatten().collect();
         println!(
             "paths:\n{}",
             paths
                 .iter()
-                .map(|p| format!("{}", p.to_string_lossy()))
+                .map(|p| format!("{}", p.as_ref().to_string_lossy()))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        paths
     }
 
-    fn collect_paths_and_assert<P>(builder: Matcher<P>, expected_len: usize)
+    fn log_paths_and_assert<P>(paths: &Vec<P>, expected_len: usize)
     where
         P: AsRef<path::Path>,
     {
-        let paths = collect_paths(builder);
+        log_paths(paths);
         assert_eq!(expected_len, paths.len());
     }
 
@@ -442,19 +460,9 @@ mod tests {
         // the following resolves to `<package-root>/test-files/**/*.txt` and therefore
         // successfully matches all files
         let builder = Builder::new("test-files/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
-        collect_paths_and_assert(builder, 6 + 1 + 2);
-        Ok(())
-    }
 
-    #[test]
-    fn match_flavours() -> Result<(), String> {
-        // TODO: continue here for different relative pattern styles
-        // TODO: for that the utils.rs function must be fixed. rest is not required, the glob is root + pattern
-        // the important part was only to figure out the root directory to start searching from
-        // TODO: the util function should simply check that there is no relative parts in the REMAINDER
-        // meaning in the actual path
-        // patterns can have no relative paths (after selectors) since it is possible to move out of the pattern
-        // and then there is a loop. (though the levels of back and forth could be checked).
+        let paths: Vec<_> = builder.into_iter().flatten().collect();
+        log_paths_and_assert(&paths, 6 + 1 + 2);
         Ok(())
     }
 
@@ -470,7 +478,9 @@ mod tests {
             builder.root(),
             builder.rest()
         );
-        collect_paths_and_assert(builder, 4);
+
+        let paths: Vec<_> = builder.into_iter().flatten().collect();
+        log_paths_and_assert(&paths, 4);
         Ok(())
     }
 
@@ -486,15 +496,7 @@ mod tests {
             .flatten()
             .collect();
 
-        println!(
-            "paths \n{}",
-            paths
-                .iter()
-                .map(|p| format!("{}", p.to_string_lossy()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        assert_eq!(6 + 1, paths.len());
+        log_paths_and_assert(&paths, 6 + 1);
         Ok(())
     }
 
@@ -511,25 +513,16 @@ mod tests {
             .filter(|p| !is_hidden_path(p))
             .collect();
 
-        println!(
-            "paths \n{}",
-            paths
-                .iter()
-                .map(|p| format!("{}", p.to_string_lossy()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        assert_eq!(6 + 1, paths.len());
+        log_paths_and_assert(&paths, 6 + 1);
         Ok(())
     }
 
     #[test]
-    fn match_filter_glob() -> Result<(), String> {
+    fn match_with_raw() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
 
-        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob(false)?;
-
+        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob_raw()?;
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
@@ -538,27 +531,18 @@ mod tests {
             .filter(|p| glob.is_match(p))
             .collect();
 
-        println!(
-            "paths \n{}",
-            paths
-                .iter()
-                .map(|p| format!("{}", p.to_string_lossy()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        assert_eq!(3, paths.len());
+        log_paths_and_assert(&paths, 3);
         Ok(())
     }
 
     #[test]
-    fn match_filter_glob_files() -> Result<(), String> {
+    fn match_with_glob() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.*";
 
-        // TODO: build_glob should create a ["**/pattern", "pattern"] glob such that the user
-        // doesn't have to specify both, then using *.txt as a pattern would work.
-        let glob = Builder::new("**/*.txt").build_glob(false)?;
-
+        // build_glob creates a ["**/pattern", "pattern"] glob such that the user two separate
+        // patterns when scanning for files, e.g., using "*.txt" (which would need "**/*.txt" as well
+        let glob = Builder::new("*.txt").build_glob()?;
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
@@ -566,20 +550,19 @@ mod tests {
             .flatten()
             .filter(|p| {
                 let is_match = glob.is_match(p);
-                println!("do-filter: {:?} - {}", p, is_match);
+                println!("is match: {:?} - {}", p, is_match);
                 is_match
             })
             .collect();
 
-        println!(
-            "paths \n{}",
-            paths
-                .iter()
-                .map(|p| format!("{}", p.to_string_lossy()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        assert_eq!(6 + 1, paths.len());
+        log_paths_and_assert(&paths, 6 + 1);
+        Ok(())
+    }
+
+    #[test]
+    fn match_flavours() -> Result<(), String> {
+        // TODO: continue here for different relative pattern styles
+        // TODO: the util function checks that there are no relative parts in the REMAINDER
         Ok(())
     }
 }

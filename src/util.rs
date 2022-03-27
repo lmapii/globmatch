@@ -78,6 +78,8 @@ where
     // let root = root.canonicalize()?;
     println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
 
+    // patterns can have no relative paths (after selectors) since it would be possible to
+    // "move" out of the pattern. do not allow such patterns (though the levels could be checked).
     if let Some(_) = rest.components().find(|c| match c {
         path::Component::ParentDir => true,
         _ => false,
