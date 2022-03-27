@@ -4,11 +4,13 @@ use std::path;
 // TODO: extend for utility functions for Vec of patterns and a common root path
 // TODO: rust serde convention - The message should not be capitalized and should not end with a period.
 
-pub use crate::error::Error;
-pub use util::{is_hidden_entry, is_hidden_path};
-
 mod error;
-mod util;
+mod iters;
+mod utils;
+
+pub use crate::error::Error;
+pub use crate::iters::{IterAll, IterFilter};
+pub use crate::utils::{is_hidden_entry, is_hidden_path};
 
 pub struct Builder<'a> {
     glob: &'a str,
@@ -44,7 +46,7 @@ impl<'a> Builder<'a> {
                 format!(
                     "'{}': {}",
                     self.glob.to_string(),
-                    util::to_upper(err.kind().to_string())
+                    utils::to_upper(err.kind().to_string())
                 )
             })?)
     }
@@ -54,10 +56,10 @@ impl<'a> Builder<'a> {
         P: AsRef<path::Path>,
     {
         // notice that resolve_root doesnot return empty patterns
-        let (root, rest) = util::resolve_root(root, self.glob).map_err(|err| {
+        let (root, rest) = utils::resolve_root(root, self.glob).map_err(|err| {
             format!(
                 "'Failed to resolve paths': {}",
-                util::to_upper(err.to_string())
+                utils::to_upper(err.to_string())
             )
         })?;
 
@@ -98,7 +100,7 @@ impl<'a> Builder<'a> {
                 format!(
                     "'{}': {}",
                     self.glob.to_string(),
-                    util::to_upper(err.kind().to_string())
+                    utils::to_upper(err.kind().to_string())
                 )
             })?;
 
@@ -199,127 +201,6 @@ impl<'a> GlobSet<'a> {
         self.matcher.is_match(p)
     }
 }
-
-pub struct IterAll<P>
-where
-    P: AsRef<path::Path>,
-{
-    root: P,
-    iter: walkdir::IntoIter,
-    matcher: globset::GlobMatcher,
-}
-
-impl<P> IterAll<P>
-where
-    P: AsRef<path::Path>,
-{
-    fn new(root: P, iter: walkdir::IntoIter, matcher: globset::GlobMatcher) -> IterAll<P> {
-        println!("matcher: {:?}", matcher);
-        IterAll {
-            root,
-            iter,
-            matcher,
-        }
-    }
-}
-
-fn match_next<P>(
-    root: P,
-    next: Option<Result<walkdir::DirEntry, walkdir::Error>>,
-    matcher: &globset::GlobMatcher,
-) -> Option<Option<Result<path::PathBuf, Error>>>
-where
-    P: AsRef<path::Path>,
-{
-    match next {
-        None => Some(None),
-        Some(res) => match res {
-            Ok(dir) => {
-                // assuming that walkdir doesn't create any paths that do not have the provided
-                // prefix we can simply exclude such paths since matching on them will anyhow
-                // be impossible
-                let p = dir.path().strip_prefix(root).ok()?;
-                println!("checking {:?}", p);
-
-                if matcher.is_match(p) {
-                    return Some(Some(Ok(path::PathBuf::from(dir.path()))));
-                }
-                return None; // iterator should continue
-            }
-            Err(err) => Some(Some(Err(err.into()))),
-        },
-    }
-}
-
-impl<P> Iterator for IterAll<P>
-where
-    P: AsRef<path::Path>,
-{
-    type Item = Result<path::PathBuf, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match match_next(&self.root, self.iter.next(), &self.matcher) {
-                None => continue,
-                Some(entry) => {
-                    return entry;
-                }
-            };
-        }
-    }
-}
-
-impl<P> IterAll<P>
-where
-    P: AsRef<path::Path>,
-{
-    pub fn filter_entry<PrePath>(
-        self,
-        mut predicate: PrePath,
-    ) -> IterFilter<walkdir::IntoIter, P, impl FnMut(&walkdir::DirEntry) -> bool>
-    where
-        PrePath: FnMut(&path::Path) -> bool,
-    {
-        // TODO: instead of creating an IterFilter it should be possible to swap out the
-        // implementation and return an IterAll<walkdir::FilterEntry> ?
-        IterFilter {
-            root: self.root,
-            iter: self.iter.filter_entry(move |entry| predicate(entry.path())),
-            matcher: self.matcher,
-        }
-    }
-}
-
-pub struct IterFilter<I, P, PreDir>
-where
-    PreDir: FnMut(&walkdir::DirEntry) -> bool,
-    P: AsRef<path::Path>,
-{
-    root: P,
-    iter: walkdir::FilterEntry<I, PreDir>,
-    matcher: globset::GlobMatcher,
-}
-
-impl<PreDir, P> Iterator for IterFilter<walkdir::IntoIter, P, PreDir>
-where
-    PreDir: FnMut(&walkdir::DirEntry) -> bool,
-    P: AsRef<path::Path>,
-{
-    type Item = Result<path::PathBuf, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match match_next(&self.root, self.iter.next(), &self.matcher) {
-                None => continue,
-                Some(entry) => {
-                    return entry;
-                }
-            };
-        }
-    }
-}
-
-// TODO: implement recursive filter_entry?
 
 #[cfg(test)]
 mod tests {
