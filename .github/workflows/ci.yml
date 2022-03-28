@@ -9,19 +9,12 @@ on:
 jobs:
   test:
     name: test
-    env:
-      CARGO: cargo
-      # When CARGO is set to CROSS, this is set to `--target matrix.target`.
-      TARGET_FLAGS:
-      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
-      TARGET_DIR: ./target
-      # Emit backtraces on panics.
-      RUST_BACKTRACE: 1
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         build:
         - pinned
+        - pinned-win
         - stable
         - macos
         - win-msvc
@@ -29,6 +22,9 @@ jobs:
         include:
         - build: pinned
           os: ubuntu-18.04
+          rust: 1.58.1
+        - build: pinned-win
+          os: windows-2019
           rust: 1.58.1
         - build: stable
           os: ubuntu-18.04
@@ -46,16 +42,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Install packages (Ubuntu)
-      if: matrix.os == 'ubuntu-18.04'
-      run: |
-        ci/ubuntu-install-packages
-
-    - name: Install packages (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        ci/macos-install-packages
-
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -63,25 +49,18 @@ jobs:
         profile: minimal
         override: true
 
-    - name: Use Cross
-      if: matrix.target != ''
+    - name: Build and test
+      run: cargo build --verbose
+
+    - if: startsWith(matrix.build, 'pinned-') == false
+      run: cargo test --verbose
+
+    - if: matrix.build == 'nightly'
       run: |
-        cargo install cross
-        echo "CARGO=cross" >> $GITHUB_ENV
-        echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
-        echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
-
-    - name: Show command used for Cargo
-      run: |
-        echo "cargo command is: ${{ env.CARGO }}"
-        echo "target flag is: ${{ env.TARGET_FLAGS }}"
-
-    - name: Build lib
-      run: ${{ env.CARGO }} build --verbose ${{ env.TARGET_FLAGS }}
-
-    - name: Run tests (with cross)
-      if: matrix.target != ''
-      run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
+        set -x
+        cargo generate-lockfile -Z minimal-versions
+        cargo build --verbose
+        cargo test --verbose
 
   rustfmt:
     name: rustfmt

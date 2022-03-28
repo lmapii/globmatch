@@ -1,10 +1,26 @@
 [package]
 name = "globmatch"
 version = "0.1.0"
+authors = ["Martin Lampacher <lmapii@gmail.com>"]
+description = """
+Cross platform glob matching with relative path components, against
+list of candidate paths determined by recursive iteration from a root directory.
+"""
+documentation = "https://github.com/lmapii/globmatch"
+homepage = "https://github.com/lmapii/globmatch"
+repository = "https://github.com/lmapii/globmatch"
+keywords = ["glob", "walkdir", "search", "pattern"]
+
+license-file = "LICENSE.txt"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "globmatch"
+bench = false
 
 [dependencies]
 globset = "0.4.8"
 walkdir = "2"
+
+[dev-dependencies]
+doc-comment = "0.3"
