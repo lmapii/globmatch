@@ -138,7 +138,7 @@
 //! [filter_entry]: #IterFilter::filter_entry
 
 #[cfg(doctest)]
-doc_comment::doctest!("../README.md");
+doc_comment::doctest!("../readme.md");
 
 use globset;
 use std::path;
