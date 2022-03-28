@@ -391,6 +391,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "windows", ignore)]
     fn match_globset() {
         // yes, it is on purpose that this is a simple list and not read from the test-files
         let files = vec![
@@ -483,10 +484,20 @@ mod tests {
     }
 
     #[test]
-    // #[should_panic]
+    #[cfg(not(target_os = "windows"))]
     fn match_absolute_pattern() -> Result<(), String> {
         let root = format!("{}/test-files", env!("CARGO_MANIFEST_DIR"));
         match Builder::new("/test-files/**/*.txt").build(root) {
+            Err(_) => Ok(()),
+            Ok(_) => Err("Expected failure".to_string()),
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn match_absolute_pattern() -> Result<(), String> {
+        let root = format!("{}/test-files", env!("CARGO_MANIFEST_DIR"));
+        match Builder::new("C:/test-files/**/*.txt").build(root) {
             Err(_) => Ok(()),
             Ok(_) => Err("Expected failure".to_string()),
         }

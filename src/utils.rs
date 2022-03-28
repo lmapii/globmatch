@@ -159,11 +159,20 @@ mod tests {
         let levels = vec!["../"; root.components().count() * 2];
         let pattern = levels.join("") + "*.txt";
 
+        let root_first = format!(
+            "{}",
+            root.components()
+                .next()
+                .unwrap()
+                .as_os_str()
+                .to_string_lossy()
+        );
+
         let (root, rest) = resolve_root(root, pattern.as_str())?;
         let root = root.canonicalize()?;
         let root = root.to_str().ok_or(io::Error::from(io::ErrorKind::Other))?;
 
-        assert_eq!(root, "/");
+        assert_eq!(root, root_first); // cannot test against "/" on windows
         assert_eq!(rest, "*.txt");
         Ok(())
     }
