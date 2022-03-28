@@ -193,6 +193,16 @@ mod tests {
                 .ok_or(io::Error::from(io::ErrorKind::Other))
                 .map_err(|err| err.to_string())?;
 
+            // forward slash won't work
+            // let exp_root = format!(
+            //     "{}{}",
+            //     env!("CARGO_MANIFEST_DIR"),
+            //     match exp_root {
+            //         "" => "".to_string(),
+            //         p => format!("/{}", p),
+            //     }
+            // );
+
             let exp_root = format!(
                 "{}{}",
                 env!("CARGO_MANIFEST_DIR"),
@@ -201,6 +211,13 @@ mod tests {
                     p => format!("/{}", p),
                 }
             );
+            let exp_root = path::PathBuf::from(exp_root)
+                .canonicalize()
+                .map_err(|err| err.to_string())?;
+            let exp_root = exp_root
+                .to_str()
+                .ok_or(io::Error::from(io::ErrorKind::Other))
+                .map_err(|err| err.to_string())?;
 
             assert_eq!(root, exp_root);
             assert_eq!(pattern, exp_pattern);
@@ -210,9 +227,9 @@ mod tests {
         // err(tst("test-files", "../test-files", "test-files", ""))?;
         tst("test-files/a", "../a", "test-files", "a")?;
 
-        if !cfg!(windows) {
-            tst("test-files", "*.txt", "test-files", "*.txt")?;
-        }
+        // if !cfg!(windows) {
+        tst("test-files", "*.txt", "test-files", "*.txt")?;
+        // }
 
         tst("test-files/a/a0", "../../../*.txt", "", "*.txt")?;
         tst("test-files/a/a0", "a0_0.txt", "test-files/a/a0", "a0_0.txt")?;
