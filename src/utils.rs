@@ -159,14 +159,10 @@ mod tests {
         let levels = vec!["../"; root.components().count() * 2];
         let pattern = levels.join("") + "*.txt";
 
-        let root_first = format!(
-            "{}",
-            root.components()
-                .next()
-                .unwrap()
-                .as_os_str()
-                .to_string_lossy()
-        );
+        let root_first = path::Path::new(root.components().next().unwrap().as_os_str());
+        let root_first = root_first
+            .to_str()
+            .ok_or(io::Error::from(io::ErrorKind::Other))?;
 
         let (root, rest) = resolve_root(root, pattern.as_str())?;
         let root = root.canonicalize()?;
