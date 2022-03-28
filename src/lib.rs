@@ -137,6 +137,9 @@
 //! [walkdir]: https://docs.rs/walkdir
 //! [filter_entry]: #IterFilter::filter_entry
 
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");
+
 use globset;
 use std::path;
 
