@@ -69,7 +69,7 @@ fn example_a() -> Result<(), String> {
 example_a().unwrap();
 ```
 
- # Example: Specifying options and using `.filter_entry`.
+### Example: Specifying options and using `.filter_entry`.
 
 Similar to the builder pattern in [globset][globset] when using `globset::GlobBuilder`, this crate allows to pass options (currently just case sensitivity) to the builder.
 
