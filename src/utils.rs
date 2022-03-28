@@ -8,7 +8,7 @@ use std::path;
 /// the pattern, resulting in the remainder `*.c`.
 ///
 /// Both, the resolved root path and the remaining pattern are provided as tuple `Some(root, rest)`.
-/// If the provided `prefix` is not a valid path this function returns an error.
+/// If the provided `prefix` is not a valid path this function returns an `io::Error`.
 pub fn resolve_root<'a, P>(
     prefix: P,
     pattern: &'a str,
@@ -40,12 +40,11 @@ where
     // an error is not caught here since we do not differ between path names and patterns and will
     // only lead to zero matches during the matching procedure.
 
-    println!("resolve root for {:?} -> {}", prefix.as_ref(), pattern);
+    // println!("resolve root for {:?} -> {}", prefix.as_ref(), pattern);
     let mut push_root = true;
     path::Path::new(pattern).components().for_each(|c| {
         if push_root {
             root.push(c);
-            println!("  {:?}", root);
 
             // notice that a path exists even if the number of "../" is beyond the root.
             // thus all superfluous "../" will simply be consumed by this iterator.
@@ -76,7 +75,7 @@ where
     // do not canonicalize the root directory, the user can decide to do this. otherwise
     // matching against patterns that also use relative paths will be impossible.
     // let root = root.canonicalize()?;
-    println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
+    // println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
 
     // patterns can have no relative paths (after selectors) since it would be possible to
     // "move" out of the pattern. do not allow such patterns (though the levels could be checked).
@@ -117,12 +116,6 @@ where
         .to_str()
         .map(|s| s.starts_with("."))
         .unwrap_or(false);
-
-    // println!(
-    //     "check hidden: {} - {}",
-    //     path.as_ref().to_string_lossy(),
-    //     is_hidden
-    // );
     is_hidden
 }
 
@@ -217,3 +210,5 @@ mod tests {
         Ok(())
     }
 }
+
+// TODO: extend for utility functions for Vec of patterns and a common root path

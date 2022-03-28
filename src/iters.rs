@@ -20,7 +20,6 @@ where
         iter: walkdir::IntoIter,
         matcher: globset::GlobMatcher,
     ) -> IterAll<P> {
-        println!("matcher: {:?}", matcher);
         IterAll {
             root,
             iter,
@@ -45,7 +44,7 @@ where
                 // prefix we can simply exclude such paths since matching on them will anyhow
                 // be impossible
                 let p = dir.path().strip_prefix(root).ok()?;
-                println!("checking {:?}", p);
+                // println!("checking {:?} -- {}", p, matcher.is_match(p));
 
                 if matcher.is_match(p) {
                     return Some(Some(Ok(path::PathBuf::from(dir.path()))));

@@ -1,8 +1,144 @@
+//! This crate provides cross platform matching for globs with relative path prefixes.
+//!
+//! For CLI utilities it can be a common pattern to operate on a set of files. Such a set of files
+//! is either provided directly, as parameter to the tool - or via configuration files. The use of
+//! a configuration file makes it easier to determine the location of a file since the path
+//! can be specified relative to the configuration. Consider, e.g., the following `.json` input:
+//!
+//! ```ignore
+//! {
+//!   "globs": [
+//!     "../../../some/text-files/**/*.txt",
+//!     "other/inputs/*.md",
+//!     "paths/from/dir[0-9]/*.*"
+//!   ]
+//! }
+//! ```
+//!
+//! Specifying these paths in a dedicated configuration file allows to resolve the paths
+//! independent of the invocation of the script operating on these files, the location of the
+//! configuration file is used as base directory.
+//!
+//! This crate combines the features of the existing crates [globset][globset] and
+//! [walkdir][walkdir] to implement a *relative glob matcher*:
+//!
+//! - A [`Builder`] is created for each glob in the same style as in `globset::Glob`.
+//! - A [`Matcher`] is created from the [`Builder`] using [`Builder::build`]. This call resolves
+//!   the relative path components within the glob by "moving" it to the specified root directory.
+//! - The [`Matcher`] is then transformed into an iterator yielding `path::PathBuf`.
+//!
+//! For the previous example it would be sufficient to use one builder per glob and to specify
+//! the root folder when building the pattern (see examples below).
+//!
+//! # Example: A simple match.
+//!
+//! The following example uses the files stored in the `test-files` folder, we're trying to match
+//! all the `.txt` files using the glob `test-files/**/*.txt` (where `test-files` is the only
+//! relative path component).
+//!
+//! ```
+//! use globmatch;
+//!
+//! # fn example_a() -> Result<(), String> {
+//! let builder = globmatch::Builder::new("test-files/**/*.txt")
+//!     .build(env!("CARGO_MANIFEST_DIR"))?;
+//!
+//! let paths: Vec<_> = builder.into_iter()
+//!     .flatten()
+//!     .collect();
+//!
+//! println!(
+//!     "paths:\n{}",
+//!     paths
+//!         .iter()
+//!         .map(|p| format!("{}", p.to_string_lossy()))
+//!         .collect::<Vec<_>>()
+//!         .join("\n")
+//! );
+//!
+//! assert_eq!(6 + 2 + 1, paths.len());
+//! # Ok(())
+//! # }
+//! # example_a().unwrap();
+//! ```
+//!
+//! # Example: Specifying options and using `.filter_entry`.
+//!
+//! Similar to the builder pattern in [globset][globset] when using `globset::GlobBuilder`, this
+//! crate allows to pass options (currently just case sensitivity) to the builder.
+//!
+//! In addition, the [`filter_entry`][filter_entry] function from [walkdir][walkdir] is accessible,
+//! but only as a single call (this crate does not implement a recursive iterator). This function
+//! allows filter files and folders *before* matching against the provided glob and therefore
+//! to efficiently exclude files and folders, e.g., hidden folders:
+//!
+//! ```
+//! use globmatch;
+//!
+//! # fn example_b() -> Result<(), String> {
+//! let root = env!("CARGO_MANIFEST_DIR");
+//! let pattern = "test-files/**/[ah]*.txt";
+//!
+//! let builder = globmatch::Builder::new(pattern)
+//!     .case_sensitive(true)
+//!     .build(root)?;
+//!
+//! let paths: Vec<_> = builder
+//!     .into_iter()
+//!     .filter_entry(|p| !globmatch::is_hidden_entry(p))
+//!     .flatten()
+//!     .collect();
+//!
+//! assert_eq!(4, paths.len());
+//! # Ok(())
+//! # }
+//! # example_b().unwrap();
+//! ```
+//!
+//! # Example: Filtering with `.build_glob`.
+//!
+//! The above examples demonstrated how to search for paths using this crate. Two more builder
+//! functions are available for additional matching on the paths yielded by the iterator, e.g.,
+//! to further limit the files (e.g., based on a global blacklist).
+//!
+//! - [`Builder::build_glob`] to create a single [`Glob`] (caution: the builder only checks
+//!    that the pattern is not empty, but allows absolute paths).
+//! - [`Builder::build_glob_set`] to create a [`Glob`] matcher that contains two globs
+//!   `[glob, **/glob]` out of the specified `glob` parameter of [`Builder::new`]. The pattern
+//!    must not be an absolute path.
+//!
+//! ```
+//! use globmatch;
+//!
+//! # fn example_c() -> Result<(), String> {
+//! let root = env!("CARGO_MANIFEST_DIR");
+//! let pattern = "test-files/**/a*.*";
+//!
+//! let builder = globmatch::Builder::new(pattern)
+//!     .case_sensitive(true)
+//!     .build(root)?;
+//!
+//! let glob = globmatch::Builder::new("*.txt").build_glob_set()?;
+//!
+//! let paths: Vec<_> = builder
+//!     .into_iter()
+//!     .filter_entry(|p| !globmatch::is_hidden_entry(p))
+//!     .flatten()
+//!     .filter(|p| glob.is_match(p))
+//!     .collect();
+//!
+//! assert_eq!(4, paths.len());
+//! # Ok(())
+//! # }
+//! # example_c().unwrap();
+//! ```
+//!
+//! [globset]: https://docs.rs/globset
+//! [walkdir]: https://docs.rs/walkdir
+//! [filter_entry]: #IterFilter::filter_entry
+
 use globset;
 use std::path;
-
-// TODO: extend for utility functions for Vec of patterns and a common root path
-// TODO: rust serde convention - The message should not be capitalized and should not end with a period.
 
 mod error;
 mod iters;
@@ -12,12 +148,26 @@ pub use crate::error::Error;
 pub use crate::iters::{IterAll, IterFilter};
 pub use crate::utils::{is_hidden_entry, is_hidden_path};
 
+/// Asterisks `*` in a glob do not match path separators (e.g., `/` in unix).
+/// Only a double asterisk `**` match multiple folder levels.
+const REQUIRE_PATHSEP: bool = true;
+
+/// A builder for a matcher or globs.
+///
+/// This builder can be configured to match case sensitive (default) or case insensitive.
+/// A single asterisk will not match path separators, e.g., `*/*.txt` does not match the file
+/// `path/to/file.txt`. Use `**` to match across directory boundaries.
+///
+/// The lifetime `'a` refers to the lifetime of the glob string.
 pub struct Builder<'a> {
     glob: &'a str,
     case_sensitive: bool,
 }
 
 impl<'a> Builder<'a> {
+    /// Create a new builder for the given glob.
+    ///
+    /// The glob is not compiled until any of the `build` methods is called.
     pub fn new(glob: &'a str) -> Builder<'a> {
         Builder {
             glob,
@@ -25,21 +175,19 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Toggle whether the glob matches case sensitive or not.
+    ///
+    /// The default setting is to match case **sensitive***.
     pub fn case_sensitive(&mut self, yes: bool) -> &mut Builder<'a> {
         self.case_sensitive = yes;
         self
     }
 
-    // TODO: document that this turns it into an is an optimized builder
-    // this item moves relative paths into the root such that patterns can contain relative paths
-    // which would otherwise not be possible. this makes a 1:1 mapping for builder and glob,
-    // which in some cases makes matching less efficient (globs on the same root path)
-    // but since it is impossible to know which paths are actually part of this and for different
-    // sub-paths it is better than to have a far-off root path.
-
+    /// The actual facade for `globset::Glob`.
+    #[doc(hidden)]
     fn glob_for(&self, glob: &str) -> Result<globset::Glob, String> {
         Ok(globset::GlobBuilder::new(glob)
-            .literal_separator(true)
+            .literal_separator(REQUIRE_PATHSEP)
             .case_insensitive(!self.case_sensitive)
             .build()
             .map_err(|err| {
@@ -51,11 +199,27 @@ impl<'a> Builder<'a> {
             })?)
     }
 
+    /// Builds a [`Matcher`] for the given [`Builder`] relative to `root`.
+    ///
+    /// Resolves the relative path prefix for the `glob` that has been provided when creating the
+    /// builder for the given root directory, e.g.,
+    ///
+    /// For the root directory `/path/to/some/folder` and glob `../../*.txt`, this function will
+    /// move the relative path components to the root folder, resulting in only `*.txt` for the
+    /// glob, and `/path/to/some/folder/../../` for the root directory.
+    ///
+    /// Notice that the relative path components will **not** be resolved. The caller of the
+    /// function can map and consolidate each path yielded by the iterator, if required.
+    ///
+    /// # Errors
+    ///
+    /// Simple error messages will be provided in case of failures, e.g., for empty patterns or
+    /// patterns for which the compilation failed; as well as for invalid root directories.
     pub fn build<P>(&self, root: P) -> Result<Matcher<'a, path::PathBuf>, String>
     where
         P: AsRef<path::Path>,
     {
-        // notice that resolve_root doesnot return empty patterns
+        // notice that resolve_root does not return empty patterns
         let (root, rest) = utils::resolve_root(root, self.glob).map_err(|err| {
             format!(
                 "'Failed to resolve paths': {}",
@@ -72,7 +236,15 @@ impl<'a> Builder<'a> {
         })
     }
 
-    pub fn build_glob_raw(&self) -> Result<Glob<'a>, String> {
+    /// Builds a [`Glob`].
+    ///
+    /// This [`Glob`] that can be used for filtering paths provided by a [`Matcher`] (created
+    /// using the `build` function).
+    pub fn build_glob(&self) -> Result<Glob<'a>, String> {
+        if self.glob.len() == 0 {
+            return Err("Empty glob".to_string());
+        }
+
         let matcher = self.glob_for(self.glob)?.compile_matcher();
         Ok(Glob {
             glob: self.glob,
@@ -80,7 +252,14 @@ impl<'a> Builder<'a> {
         })
     }
 
-    pub fn build_glob(&self) -> Result<GlobSet<'a>, String> {
+    /// Builds a combined [`GlobSet`].
+    ///
+    /// A globset extends the provided `pattern` to `[pattern, **/pattern]`. This is useful, e.g.,
+    /// for blacklists, where only the file type is important.
+    ///
+    /// Yes, it would be sufficient to use the pattern `**/pattern` in the first place. This is
+    /// a simple commodity function.
+    pub fn build_glob_set(&self) -> Result<GlobSet<'a>, String> {
         if self.glob.len() == 0 {
             return Err("Empty glob".to_string());
         }
@@ -111,13 +290,17 @@ impl<'a> Builder<'a> {
     }
 }
 
+/// Matcher type for transformation into an iterator.
+///
+/// This type exists such that [`Builder::build`] can return a result type (whereas `into_iter`
+/// cannot). Notice that `iter()` is not implemented due to the use of references.
 pub struct Matcher<'a, P>
 where
     P: AsRef<path::Path>,
 {
-    glob: &'a str, // original glob-pattern
-    root: P,       // root path of a resolved pattern
-    rest: &'a str, // remaining pattern after root has been resolved
+    glob: &'a str, // Original glob-pattern
+    root: P,       // Root path of a resolved pattern
+    rest: &'a str, // Remaining pattern after root has been resolved
     matcher: globset::GlobMatcher,
 }
 
@@ -128,13 +311,8 @@ where
     type Item = Result<path::PathBuf, Error>;
     type IntoIter = IterAll<P>;
 
+    /// Transform the `Matcher` into a recursive directory iterator.
     fn into_iter(self) -> Self::IntoIter {
-        // println!(
-        //     "matching {} -> {} (original {})",
-        //     self.root.as_ref().to_string_lossy(),
-        //     self.rest,
-        //     self.glob
-        // );
         let walk_root = path::PathBuf::from(self.root.as_ref());
         IterAll::new(
             self.root,
@@ -227,6 +405,7 @@ mod tests {
             "/some/path/test-files/a/a2",
             "/some/path/test-files/a/a2/a2_0.txt",
             "/some/path/test-files/b/b_0.txt",
+            "some_file.txt",
         ];
 
         // function declaration within function. yay this starts to feel like python :D
@@ -244,7 +423,7 @@ mod tests {
             Ok(globset::GlobBuilder::new(glob)
                 .case_insensitive(!case_sensitive)
                 .backslash_escape(true)
-                .literal_separator(true)
+                .literal_separator(REQUIRE_PATHSEP)
                 .build()?
                 .compile_matcher())
         }
@@ -278,6 +457,9 @@ mod tests {
 
         // this is important, an empty pattern does not match anything
         test_for("", 0, &files, false);
+
+        // notice that **/*.txt also matches zero recursive levels and thus also "some_file.txt"
+        test_for("**/*.txt", 7, &files, false);
     }
 
     #[test]
@@ -343,7 +525,7 @@ mod tests {
         let builder = Builder::new("test-files/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
 
         let paths: Vec<_> = builder.into_iter().flatten().collect();
-        log_paths_and_assert(&paths, 6 + 1 + 2);
+        log_paths_and_assert(&paths, 6 + 2 + 1); // this also matches `some_file.txt`
         Ok(())
     }
 
@@ -399,11 +581,11 @@ mod tests {
     }
 
     #[test]
-    fn match_with_raw() -> Result<(), String> {
+    fn match_with_glob() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.txt";
 
-        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob_raw()?;
+        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob()?;
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
@@ -417,13 +599,14 @@ mod tests {
     }
 
     #[test]
-    fn match_with_glob() -> Result<(), String> {
+    fn match_with_glob_all() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
         let pattern = "test-files/**/*.*";
 
         // build_glob creates a ["**/pattern", "pattern"] glob such that the user two separate
-        // patterns when scanning for files, e.g., using "*.txt" (which would need "**/*.txt" as well
-        let glob = Builder::new("*.txt").build_glob()?;
+        // patterns when scanning for files, e.g., using "*.txt" (which would need "**/*.txt"
+        // as well), but also when specifying paths within this glob.
+        let glob = Builder::new("*.txt").build_glob_set()?;
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
