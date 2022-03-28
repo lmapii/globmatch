@@ -11,7 +11,7 @@ homepage = "https://github.com/lmapii/globmatch"
 repository = "https://github.com/lmapii/globmatch"
 keywords = ["glob", "walkdir", "search", "pattern"]
 
-license-file = "LICENSE.txt"
+license-file = "LICENSE"
 edition = "2021"
 
 [lib]
