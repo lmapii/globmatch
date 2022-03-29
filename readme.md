@@ -5,10 +5,13 @@
 
 Rust crate for resolving globs relative to a specified directory. Based on [globset][globset] and [walkdir][walkdir].
 
-<!--
 ## Documentation
 
 [https://docs.rs/globmatch](https://docs.rs/globmatch)
+
+For the documentation of the glob format please refer to
+
+[https://docs.rs/globset](https://docs.rs/globset)
 
 ## Usage
 
@@ -17,7 +20,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 globmatch = "0.1"
-``` -->
+```
 
 ## Examples and concept
 
@@ -43,6 +46,22 @@ Specifying these paths in a dedicated configuration file allows to resolve the p
 The following example uses the files stored in the `test-files` folder, we're trying to match all the `.txt` files using the glob `test-files/**/*.txt` (where `test-files` is the only relative path component).
 
 ```rust
+
+/*
+    Example files:
+    globmatch/test-files/.hidden
+    globmatch/test-files/.hidden/h_1.txt
+    globmatch/test-files/.hidden/h_0.txt
+    globmatch/test-files/a/a2/a2_0.txt
+    globmatch/test-files/a/a0/a0_0.txt
+    globmatch/test-files/a/a0/a0_1.txt
+    globmatch/test-files/a/a0/A0_3.txt
+    globmatch/test-files/a/a0/a0_2.md
+    globmatch/test-files/a/a1/a1_0.txt
+    globmatch/test-files/some_file.txt
+    globmatch/test-files/b/b_0.txt
+ */
+
 use globmatch;
 
 fn example_a() -> Result<(), String> {

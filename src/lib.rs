@@ -30,6 +30,10 @@
 //! For the previous example it would be sufficient to use one builder per glob and to specify
 //! the root folder when building the pattern (see examples below).
 //!
+//! # Globs
+//!
+//! Please check the documentation of [globset][globset] for the available glob format.
+//!
 //! # Example: A simple match.
 //!
 //! The following example uses the files stored in the `test-files` folder, we're trying to match
@@ -37,6 +41,21 @@
 //! relative path component).
 //!
 //! ```
+//! /*
+//!     Example files:
+//!     globmatch/test-files/.hidden
+//!     globmatch/test-files/.hidden/h_1.txt
+//!     globmatch/test-files/.hidden/h_0.txt
+//!     globmatch/test-files/a/a2/a2_0.txt
+//!     globmatch/test-files/a/a0/a0_0.txt
+//!     globmatch/test-files/a/a0/a0_1.txt
+//!     globmatch/test-files/a/a0/A0_3.txt
+//!     globmatch/test-files/a/a0/a0_2.md
+//!     globmatch/test-files/a/a1/a1_0.txt
+//!     globmatch/test-files/some_file.txt
+//!     globmatch/test-files/b/b_0.txt
+//!  */
+//!
 //! use globmatch;
 //!
 //! # fn example_a() -> Result<(), String> {

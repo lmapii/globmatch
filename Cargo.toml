@@ -6,7 +6,7 @@ description = """
 Cross platform glob matching with relative path components, against
 list of candidate paths determined by recursive iteration from a root directory.
 """
-documentation = "https://github.com/lmapii/globmatch"
+documentation = "https://docs.rs/globmatch"
 homepage = "https://github.com/lmapii/globmatch"
 repository = "https://github.com/lmapii/globmatch"
 keywords = ["glob", "walkdir", "search", "pattern"]
