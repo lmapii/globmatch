@@ -19,7 +19,7 @@ impl fmt::Display for Error {
 impl From<walkdir::Error> for Error {
     fn from(item: walkdir::Error) -> Self {
         if let Some(path) = item.path() {
-            let common = String::from(format!("Failed to walk path {}", path.to_string_lossy()));
+            let common = format!("Failed to walk path {}", path.to_string_lossy());
 
             if let Some(inner) = item.io_error() {
                 return match inner.kind() {
@@ -35,6 +35,6 @@ impl From<walkdir::Error> for Error {
             }
             return Error(format!("{}: Unknown error occurred", common));
         }
-        Error(format!("<unknown-path>: Unknown error occurred"))
+        Error("<unknown-path>: Unknown error occurred".to_string())
     }
 }

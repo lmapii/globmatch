@@ -19,7 +19,7 @@ where
     let mut root = path::PathBuf::from(prefix.as_ref());
     let mut rest = path::PathBuf::new();
 
-    if pattern.len() == 0 {
+    if pattern.is_empty() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "Empty pattern"));
     }
 

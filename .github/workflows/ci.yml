@@ -79,6 +79,21 @@ jobs:
       run: |
         cargo fmt --all -- --check
 
+  clippy:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: clippy
+    - name: Run analysis
+      run: cargo clippy --all-targets -- -D warnings
+
   docs:
     name: Docs
     runs-on: ubuntu-20.04

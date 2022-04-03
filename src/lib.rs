@@ -159,7 +159,6 @@
 #[cfg(doctest)]
 doc_comment::doctest!("../readme.md");
 
-use globset;
 use std::path;
 
 mod error;
@@ -208,17 +207,17 @@ impl<'a> Builder<'a> {
     /// The actual facade for `globset::Glob`.
     #[doc(hidden)]
     fn glob_for(&self, glob: &str) -> Result<globset::Glob, String> {
-        Ok(globset::GlobBuilder::new(glob)
+        globset::GlobBuilder::new(glob)
             .literal_separator(REQUIRE_PATHSEP)
             .case_insensitive(!self.case_sensitive)
             .build()
             .map_err(|err| {
                 format!(
                     "'{}': {}",
-                    self.glob.to_string(),
+                    self.glob,
                     utils::to_upper(err.kind().to_string())
                 )
-            })?)
+            })
     }
 
     /// Builds a [`Matcher`] for the given [`Builder`] relative to `root`.
@@ -263,7 +262,7 @@ impl<'a> Builder<'a> {
     /// This [`Glob`] that can be used for filtering paths provided by a [`Matcher`] (created
     /// using the `build` function).
     pub fn build_glob(&self) -> Result<Glob<'a>, String> {
-        if self.glob.len() == 0 {
+        if self.glob.is_empty() {
             return Err("Empty glob".to_string());
         }
 
@@ -282,7 +281,7 @@ impl<'a> Builder<'a> {
     /// Yes, it would be sufficient to use the pattern `**/pattern` in the first place. This is
     /// a simple commodity function.
     pub fn build_glob_set(&self) -> Result<GlobSet<'a>, String> {
-        if self.glob.len() == 0 {
+        if self.glob.is_empty() {
             return Err("Empty glob".to_string());
         }
 
@@ -300,7 +299,7 @@ impl<'a> Builder<'a> {
             .map_err(|err| {
                 format!(
                     "'{}': {}",
-                    self.glob.to_string(),
+                    self.glob,
                     utils::to_upper(err.kind().to_string())
                 )
             })?;
@@ -434,7 +433,7 @@ mod tests {
         // function declaration within function. yay this starts to feel like python :D
         fn match_glob<'a>(f: &'a str, m: &globset::GlobMatcher) -> Option<&'a str> {
             match m.is_match(f) {
-                true => Some(f.as_ref()),
+                true => Some(f),
                 false => None,
             }
         }
@@ -451,7 +450,7 @@ mod tests {
                 .compile_matcher())
         }
 
-        fn test_for(glob: &str, len: usize, files: &Vec<&str>, case_sensitive: bool) {
+        fn test_for(glob: &str, len: usize, files: &[&str], case_sensitive: bool) {
             let glob = glob_for(glob, case_sensitive).unwrap();
             let matches = files
                 .iter()
@@ -529,7 +528,7 @@ mod tests {
     some helper functions for testing
     */
 
-    fn log_paths<P>(paths: &Vec<P>)
+    fn log_paths<P>(paths: &[P])
     where
         P: AsRef<path::Path>,
     {
@@ -543,7 +542,7 @@ mod tests {
         );
     }
 
-    fn log_paths_and_assert<P>(paths: &Vec<P>, expected_len: usize)
+    fn log_paths_and_assert<P>(paths: &[P], expected_len: usize)
     where
         P: AsRef<path::Path>,
     {
@@ -664,7 +663,14 @@ mod tests {
     }
 }
 
-// TODO: checkout coverage
+// TODO: checkout coverage, only works with nightly ?
+// cargo +nightly test
+// rustup component add llvm-tools-preview
+// rustup show -> should be stable
+// warning: `-Z instrument-coverage` is deprecated; use `-C instrument-coverage`
+// -> mozilla grcov out of date ..?
+// and cargo-taurpalin is linux x86 only -> CI only
+
 // https://github.com/mozilla/grcov
 // https://marco-c.github.io/2020/11/24/rust-source-based-code-coverage.html
 // https://github.com/marco-c/rust-code-coverage-sample/blob/main/run_gcov.sh

@@ -9,6 +9,7 @@ use std::path;
 ///
 /// Both, the resolved root path and the remaining pattern are provided as tuple `Some(root, rest)`.
 /// If the provided `prefix` is not a valid path this function returns an `io::Error`.
+#[allow(clippy::needless_lifetimes)]
 pub fn resolve_root<'a, P>(
     prefix: P,
     pattern: &'a str,
@@ -19,7 +20,7 @@ where
     let mut root = path::PathBuf::from(prefix.as_ref());
     let mut rest = path::PathBuf::new();
 
-    if pattern.len() == 0 {
+    if pattern.is_empty() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty pattern"));
     }
 
@@ -62,12 +63,9 @@ where
     // it will be matched. globset is not able to match empty patterns.
     if rest.components().count() == 0 {
         if let Some(c) = root.components().next_back() {
-            match c {
-                path::Component::Normal(_) => {
-                    rest.push(c);
-                    root.pop();
-                }
-                _ => (),
+            if let path::Component::Normal(_) = c {
+                rest.push(c);
+                root.pop();
             }
         }
     }
@@ -79,10 +77,10 @@ where
 
     // patterns can have no relative paths (after selectors) since it would be possible to
     // "move" out of the pattern. do not allow such patterns (though the levels could be checked).
-    if let Some(_) = rest.components().find(|c| match c {
-        path::Component::ParentDir => true,
-        _ => false,
-    }) {
+    if rest
+        .components()
+        .any(|c| matches!(c, path::Component::ParentDir))
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
@@ -114,7 +112,7 @@ where
         .file_name()
         .unwrap_or_else(|| path.as_ref().as_os_str())
         .to_str()
-        .map(|s| s.starts_with("."))
+        .map(|s| s.starts_with('.'))
         .unwrap_or(false);
     is_hidden
 }
@@ -127,7 +125,7 @@ where
         match c
             .as_os_str()
             .to_str()
-            .map(|s| s.starts_with("."))
+            .map(|s| s.starts_with('.'))
             .unwrap_or(false)
         {
             true => Some(c),
@@ -135,11 +133,7 @@ where
         }
     });
 
-    let is_hidden = match has_hidden {
-        None => false,
-        _ => true,
-    };
-    is_hidden
+    !matches!(has_hidden, None)
 }
 
 #[cfg(test)]
@@ -169,7 +163,9 @@ mod tests {
 
         let (root, rest) = resolve_root(root, pattern.as_str())?;
         let root = root.canonicalize()?;
-        let root = root.to_str().ok_or(io::Error::from(io::ErrorKind::Other))?;
+        let root = root
+            .to_str()
+            .ok_or_else(|| io::Error::from(io::ErrorKind::Other))?;
 
         if !cfg!(windows) {
             // assert_eq!(root, root_first); // cannot test against "/" on windows
@@ -190,7 +186,7 @@ mod tests {
             let root = root.canonicalize().map_err(|err| err.to_string())?;
             let root = root
                 .to_str()
-                .ok_or(io::Error::from(io::ErrorKind::Other))
+                .ok_or_else(|| io::Error::from(io::ErrorKind::Other))
                 .map_err(|err| err.to_string())?;
 
             // forward slash won't work
@@ -216,7 +212,7 @@ mod tests {
                 .map_err(|err| err.to_string())?;
             let exp_root = exp_root
                 .to_str()
-                .ok_or(io::Error::from(io::ErrorKind::Other))
+                .ok_or_else(|| io::Error::from(io::ErrorKind::Other))
                 .map_err(|err| err.to_string())?;
 
             assert_eq!(root, exp_root);

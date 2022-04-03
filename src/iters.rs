@@ -49,7 +49,7 @@ where
                 if matcher.is_match(p) {
                     return Some(Some(Ok(path::PathBuf::from(dir.path()))));
                 }
-                return None; // iterator should continue
+                None // iterator should continue
             }
             Err(err) => Some(Some(Err(err.into()))),
         },
