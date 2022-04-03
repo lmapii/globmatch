@@ -454,8 +454,7 @@ mod tests {
             let glob = glob_for(glob, case_sensitive).unwrap();
             let matches = files
                 .iter()
-                .map(|f| match_glob(f, &glob))
-                .flatten()
+                .filter_map(|f| match_glob(f, &glob))
                 .collect::<Vec<_>>();
             println!(
                 "matches for {}:\n'{}'",
