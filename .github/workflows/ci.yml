@@ -63,7 +63,7 @@ jobs:
           - { build: 'windows-x86_64-msvc',   os: 'windows-latest', target: 'x86_64-pc-windows-msvc',        cross: false, rust: stable }
           - { build: 'windows-i686-msvc',     os: 'windows-latest', target: 'i686-pc-windows-msvc',          cross: false, rust: stable }
           - { build: 'windows-x86_64-mingw',  os: 'windows-latest', target: 'x86_64-pc-windows-gnu',         cross: false, rust: stable }
-          - { build: 'windows-i686-mingw',    os: 'windows-latest', target: 'i686-pc-windows-gnu',           cross: false, rust: stable }
+        # - { build: 'windows-i686-mingw',    os: 'windows-latest', target: 'i686-pc-windows-gnu',           cross: false, rust: stable }
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
