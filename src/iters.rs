@@ -2,6 +2,11 @@ use std::path;
 
 use crate::error::Error;
 
+/// Standard iterator created from a [`Matcher`](./struct.Matcher.html).
+///
+/// This iterator iterates over all paths recursively without any filter. Use
+/// [`IterAll::filter_entry`] to create a more efficient [`IterFilter`] out of this iterator,
+/// e.g., do not walk any hidden folders such as `.git`.
 pub struct IterAll<P>
 where
     P: AsRef<path::Path>,
@@ -28,6 +33,8 @@ where
     }
 }
 
+/// Helper function for a consistent implementation of the `next` functions for
+/// [`IterAll`] and [`IterFilter`].
 fn match_next<P>(
     root: P,
     next: Option<Result<walkdir::DirEntry, walkdir::Error>>,
@@ -78,6 +85,11 @@ impl<P> IterAll<P>
 where
     P: AsRef<path::Path>,
 {
+    /// Transform the iterator into a [`IterFilter`] using the given predicate.
+    ///
+    /// The provided predicate allows to efficiently filter any paths that should not be walked.
+    /// The iterator will completely skip any path and its sub-paths that do not satisfy the given
+    /// iterator.
     pub fn filter_entry<PrePath>(
         self,
         mut predicate: PrePath,
@@ -95,6 +107,10 @@ where
     }
 }
 
+/// Filtered iterator created via [`IterAll::filter_entry`].
+///
+/// This iterator iterates over all paths recursively but applies the configured predicate
+/// to all paths.
 pub struct IterFilter<I, P, PreDir>
 where
     PreDir: FnMut(&walkdir::DirEntry) -> bool,

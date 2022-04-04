@@ -95,6 +95,7 @@ where
     Ok((root, rest))
 }
 
+/// Transforms the first character of a string to uppercase.
 pub(crate) fn to_upper(s: String) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -103,6 +104,13 @@ pub(crate) fn to_upper(s: String) -> String {
     }
 }
 
+/// Checks if the provided path is a hidden "entry".
+///
+/// An entry is hidden if its final path component (filename or directory name) starts with a dot,
+/// e.g., `.git` or `.clang-format` are hidden entries.
+///
+/// This function can be used in [IterAll::filter_entry](./struct.IterAll.html#method.filter_entry)
+/// to avoid iterating through hidden paths.
 pub fn is_hidden_entry<P>(path: P) -> bool
 where
     P: AsRef<path::Path>,
@@ -117,6 +125,9 @@ where
     is_hidden
 }
 
+/// Checks if the provided path has a hidden path component.
+///
+/// A path is hidden if one of its path component (filename or directory name) starts with a dot.
 pub fn is_hidden_path<P>(path: P) -> bool
 where
     P: AsRef<path::Path>,
@@ -238,5 +249,3 @@ mod tests {
         Ok(())
     }
 }
-
-// TODO: extend for utility functions for Vec of patterns and a common root path

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::io;
 
+/// Simple error type used by this facade.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Error(String);
 

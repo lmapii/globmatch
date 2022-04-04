@@ -319,9 +319,12 @@ pub struct Matcher<'a, P>
 where
     P: AsRef<path::Path>,
 {
-    glob: &'a str, // Original glob-pattern
-    root: P,       // Root path of a resolved pattern
-    rest: &'a str, // Remaining pattern after root has been resolved
+    glob: &'a str,
+    /// Original glob-pattern
+    root: P,
+    /// Root path of a resolved pattern
+    rest: &'a str,
+    /// Remaining pattern after root has been resolved
     matcher: globset::GlobMatcher,
 }
 
@@ -332,7 +335,7 @@ where
     type Item = Result<path::PathBuf, Error>;
     type IntoIter = IterAll<P>;
 
-    /// Transform the `Matcher` into a recursive directory iterator.
+    /// Transform the [`Matcher`] into a recursive directory iterator.
     fn into_iter(self) -> Self::IntoIter {
         let walk_root = path::PathBuf::from(self.root.as_ref());
         IterAll::new(
@@ -347,34 +350,52 @@ impl<'a, P> Matcher<'a, P>
 where
     P: AsRef<path::Path>,
 {
+    /// Provides the original glob-pattern used to create this [`Matcher`].
+    ///
+    /// This is the unchanged glob, i.e., no relative path components have been resolved.
     pub fn glob(&self) -> &str {
         self.glob
     }
 
+    /// Provides the resolved root folder used by the [`Matcher`].
+    ///
+    /// This directory already contains the path components from the original glob. The main
+    /// intention of this function is to for debugging or logging (thus a String).
     pub fn root(&self) -> String {
         let path = path::PathBuf::from(self.root.as_ref());
         String::from(path.to_str().unwrap())
     }
 
+    /// Provides the resolved glob used by the [`Matcher`].
+    ///
+    /// All relative path components have been resolved for this glob. The glob is of type &str
+    /// since all globs are input parameters and specified as strings (and not paths).
     pub fn rest(&self) -> &str {
         self.rest
     }
 
+    /// Checks whether the provided path is a match for the stored glob.
     pub fn is_match(&self, p: P) -> bool {
         self.matcher.is_match(p)
     }
 }
 
+/// Wrapper type for glob matching.
+///
+/// This type is created by [`Builder::build_glob`] for a single glob on which no transformations
+/// or path resolutions have been performed.
 pub struct Glob<'a> {
     glob: &'a str,
     pub matcher: globset::GlobMatcher,
 }
 
 impl<'a> Glob<'a> {
+    /// Provides the original glob-pattern used to create this [`Glob`].
     pub fn glob(&self) -> &str {
         self.glob
     }
 
+    /// Checks whether the provided path is a match for the stored glob.
     pub fn is_match<P>(&self, p: P) -> bool
     where
         P: AsRef<path::Path>,
@@ -383,16 +404,23 @@ impl<'a> Glob<'a> {
     }
 }
 
+/// Comfort type for glob matching.
+///
+/// This type is created by [`Builder::build_glob_set`] (refer to the function documentation). The
+/// matcher stores two globs created from the original pattern as `[**/pattern, pattern]` for
+/// easy matching on multiple paths.
 pub struct GlobSet<'a> {
     glob: &'a str,
     pub matcher: globset::GlobSet,
 }
 
 impl<'a> GlobSet<'a> {
+    /// Provides the original glob-pattern used to create this [`GlobSet`].
     pub fn glob(&self) -> &str {
         self.glob
     }
 
+    /// Checks whether the provided path is a match for any of the two stored globs.
     pub fn is_match<P>(&self, p: P) -> bool
     where
         P: AsRef<path::Path>,
@@ -656,20 +684,8 @@ mod tests {
 
     #[test]
     fn match_flavours() -> Result<(), String> {
-        // TODO: continue here for different relative pattern styles
-        // TODO: the util function checks that there are no relative parts in the REMAINDER
+        // TODO: implememnt tests for different relative pattern styles
+        // TODO: also provide failing tests for relative parts in the rest/remainder glob
         Ok(())
     }
 }
-
-// TODO: checkout coverage, only works with nightly ?
-// cargo +nightly test
-// rustup component add llvm-tools-preview
-// rustup show -> should be stable
-// warning: `-Z instrument-coverage` is deprecated; use `-C instrument-coverage`
-// -> mozilla grcov out of date ..?
-// and cargo-taurpalin is linux x86 only -> CI only
-
-// https://github.com/mozilla/grcov
-// https://marco-c.github.io/2020/11/24/rust-source-based-code-coverage.html
-// https://github.com/marco-c/rust-code-coverage-sample/blob/main/run_gcov.sh
