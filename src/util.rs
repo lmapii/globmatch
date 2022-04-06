@@ -40,7 +40,7 @@ where
     // an error is not caught here since we do not differ between path names and patterns and will
     // only lead to zero matches during the matching procedure.
 
-    println!("resolve root for {:?} -> {}", prefix.as_ref(), pattern);
+    // println!("resolve root for {:?} -> {}", prefix.as_ref(), pattern);
     let mut push_root = true;
     path::Path::new(pattern).components().for_each(|c| {
         if push_root {
@@ -58,8 +58,7 @@ where
         }
     });
 
-    println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
-
+    // println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
     rest.components().map_while(|c| match c {
         path::Component::ParentDir => None,
         _ => Some(()),
