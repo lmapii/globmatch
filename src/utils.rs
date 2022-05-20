@@ -76,7 +76,8 @@ where
     // println!(" -- root {:?}\n    rest {}", root, rest.to_str().unwrap());
 
     // patterns can have no relative paths (after selectors) since it would be possible to
-    // "move" out of the pattern. do not allow such patterns (though the levels could be checked).
+    // "move" out of the pattern using "../" and changing into a directory outside of root.
+    // do not allow such patterns (though the levels could be checked).
     if rest
         .components()
         .any(|c| matches!(c, path::Component::ParentDir))
@@ -132,16 +133,11 @@ pub fn is_hidden_path<P>(path: P) -> bool
 where
     P: AsRef<path::Path>,
 {
-    let has_hidden = path.as_ref().components().find_map(|c| {
-        match c
-            .as_os_str()
+    let has_hidden = path.as_ref().components().find(|c| {
+        c.as_os_str()
             .to_str()
             .map(|s| s.starts_with('.'))
             .unwrap_or(false)
-        {
-            true => Some(c),
-            _ => None,
-        }
     });
 
     !matches!(has_hidden, None)

@@ -1,6 +1,6 @@
 [package]
 name = "globmatch"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Martin Lampacher <lmapii@gmail.com>"]
 description = """
 Cross platform glob matching with relative path components, against
