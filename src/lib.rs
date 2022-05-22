@@ -36,30 +36,30 @@
 //!
 //! # Example: A simple match.
 //!
-//! The following example uses the files stored in the `test-files` folder, we're trying to match
-//! all the `.txt` files using the glob `test-files/**/*.txt` (where `test-files` is the only
+//! The following example uses the files stored in the `test-files/c-simple` folder, we're trying to match
+//! all the `.txt` files using the glob `test-files/c-simple/**/*.txt` (where `test-files/c-simple` is the only
 //! relative path component).
 //!
 //! ```
 //! /*
 //!     Example files:
-//!     globmatch/test-files/.hidden
-//!     globmatch/test-files/.hidden/h_1.txt
-//!     globmatch/test-files/.hidden/h_0.txt
-//!     globmatch/test-files/a/a2/a2_0.txt
-//!     globmatch/test-files/a/a0/a0_0.txt
-//!     globmatch/test-files/a/a0/a0_1.txt
-//!     globmatch/test-files/a/a0/A0_3.txt
-//!     globmatch/test-files/a/a0/a0_2.md
-//!     globmatch/test-files/a/a1/a1_0.txt
-//!     globmatch/test-files/some_file.txt
-//!     globmatch/test-files/b/b_0.txt
+//!     globmatch/test-files/c-simple/.hidden
+//!     globmatch/test-files/c-simple/.hidden/h_1.txt
+//!     globmatch/test-files/c-simple/.hidden/h_0.txt
+//!     globmatch/test-files/c-simple/a/a2/a2_0.txt
+//!     globmatch/test-files/c-simple/a/a0/a0_0.txt
+//!     globmatch/test-files/c-simple/a/a0/a0_1.txt
+//!     globmatch/test-files/c-simple/a/a0/A0_3.txt
+//!     globmatch/test-files/c-simple/a/a0/a0_2.md
+//!     globmatch/test-files/c-simple/a/a1/a1_0.txt
+//!     globmatch/test-files/c-simple/some_file.txt
+//!     globmatch/test-files/c-simple/b/b_0.txt
 //!  */
 //!
 //! use globmatch;
 //!
 //! # fn example_a() -> Result<(), String> {
-//! let builder = globmatch::Builder::new("test-files/**/*.txt")
+//! let builder = globmatch::Builder::new("test-files/c-simple/**/*.txt")
 //!     .build(env!("CARGO_MANIFEST_DIR"))?;
 //!
 //! let paths: Vec<_> = builder.into_iter()
@@ -96,7 +96,7 @@
 //!
 //! # fn example_b() -> Result<(), String> {
 //! let root = env!("CARGO_MANIFEST_DIR");
-//! let pattern = "test-files/**/[ah]*.txt";
+//! let pattern = "test-files/c-simple/**/[ah]*.txt";
 //!
 //! let builder = globmatch::Builder::new(pattern)
 //!     .case_sensitive(true)
@@ -131,7 +131,7 @@
 //!
 //! # fn example_c() -> Result<(), String> {
 //! let root = env!("CARGO_MANIFEST_DIR");
-//! let pattern = "test-files/**/a*.*";
+//! let pattern = "test-files/c-simple/**/a*.*";
 //!
 //! let builder = globmatch::Builder::new(pattern)
 //!     .case_sensitive(true)
@@ -164,6 +164,8 @@ use std::path;
 mod error;
 mod iters;
 mod utils;
+
+pub mod wrappers;
 
 pub use crate::error::Error;
 pub use crate::iters::{IterAll, IterFilter};
@@ -256,6 +258,10 @@ impl<'a> Builder<'a> {
             matcher,
         })
     }
+
+    // TODO: allow to build a matcher for absolute paths
+    // meaning, if self.glob is absolute, then simply don't resolve paths
+    // could be a property -> ignore_prefix_if_absolute
 
     /// Builds a [`Glob`].
     ///
@@ -442,19 +448,19 @@ mod tests {
     #[test]
     #[cfg_attr(target_os = "windows", ignore)]
     fn match_globset() {
-        // yes, it is on purpose that this is a simple list and not read from the test-files
+        // yes, it is on purpose that this is a simple list and not read from the test-files/c-simple
         let files = vec![
-            "/some/path/test-files/a",
-            "/some/path/test-files/a/a0",
-            "/some/path/test-files/a/a0/a0_0.txt",
-            "/some/path/test-files/a/a0/a0_1.txt",
-            "/some/path/test-files/a/a0/A0_3.txt",
-            "/some/path/test-files/a/a0/a0_2.md",
-            "/some/path/test-files/a/a1",
-            "/some/path/test-files/a/a1/a1_0.txt",
-            "/some/path/test-files/a/a2",
-            "/some/path/test-files/a/a2/a2_0.txt",
-            "/some/path/test-files/b/b_0.txt",
+            "/some/path/test-files/c-simple/a",
+            "/some/path/test-files/c-simple/a/a0",
+            "/some/path/test-files/c-simple/a/a0/a0_0.txt",
+            "/some/path/test-files/c-simple/a/a0/a0_1.txt",
+            "/some/path/test-files/c-simple/a/a0/A0_3.txt",
+            "/some/path/test-files/c-simple/a/a0/a0_2.md",
+            "/some/path/test-files/c-simple/a/a1",
+            "/some/path/test-files/c-simple/a/a1/a1_0.txt",
+            "/some/path/test-files/c-simple/a/a2",
+            "/some/path/test-files/c-simple/a/a2/a2_0.txt",
+            "/some/path/test-files/c-simple/b/b_0.txt",
             "some_file.txt",
         ];
 
@@ -496,13 +502,13 @@ mod tests {
             assert_eq!(len, matches.len());
         }
 
-        test_for("/test-files/**/*.txt", 0, &files, true);
-        test_for("test-files/**/*.txt", 0, &files, true);
-        test_for("**/test-files/**/*.txt", 6, &files, true);
-        test_for("**/test-files/**/a*.txt", 4, &files, true);
-        test_for("**/test-files/**/a*.txt", 5, &files, false);
-        test_for("**/test-files/a/a*/a*.txt", 5, &files, false);
-        test_for("**/test-files/a/a[01]/a*.txt", 4, &files, false);
+        test_for("/test-files/c-simple/**/*.txt", 0, &files, true);
+        test_for("test-files/c-simple/**/*.txt", 0, &files, true);
+        test_for("**/test-files/c-simple/**/*.txt", 6, &files, true);
+        test_for("**/test-files/c-simple/**/a*.txt", 4, &files, true);
+        test_for("**/test-files/c-simple/**/a*.txt", 5, &files, false);
+        test_for("**/test-files/c-simple/a/a*/a*.txt", 5, &files, false);
+        test_for("**/test-files/c-simple/a/a[01]/a*.txt", 4, &files, false);
 
         // this is important, an empty pattern does not match anything
         test_for("", 0, &files, false);
@@ -534,8 +540,8 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn match_absolute_pattern() -> Result<(), String> {
-        let root = format!("{}/test-files", env!("CARGO_MANIFEST_DIR"));
-        match Builder::new("/test-files/**/*.txt").build(root) {
+        let root = format!("{}/test-files/c-simple", env!("CARGO_MANIFEST_DIR"));
+        match Builder::new("/test-files/c-simple/**/*.txt").build(root) {
             Err(_) => Ok(()),
             Ok(_) => Err("Expected failure".to_string()),
         }
@@ -544,8 +550,8 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn match_absolute_pattern() -> Result<(), String> {
-        let root = format!("{}/test-files", env!("CARGO_MANIFEST_DIR"));
-        match Builder::new("C:/test-files/**/*.txt").build(root) {
+        let root = format!("{}/test-files/c-simple", env!("CARGO_MANIFEST_DIR"));
+        match Builder::new("C:/test-files/c-simple/**/*.txt").build(root) {
             Err(_) => Ok(()),
             Ok(_) => Err("Expected failure".to_string()),
         }
@@ -579,9 +585,10 @@ mod tests {
 
     #[test]
     fn match_all() -> Result<(), String> {
-        // the following resolves to `<package-root>/test-files/**/*.txt` and therefore
+        // the following resolves to `<package-root>/test-files/c-simple/**/*.txt` and therefore
         // successfully matches all files
-        let builder = Builder::new("test-files/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
+        let builder =
+            Builder::new("test-files/c-simple/**/*.txt").build(env!("CARGO_MANIFEST_DIR"))?;
 
         let paths: Vec<_> = builder.into_iter().flatten().collect();
         log_paths_and_assert(&paths, 6 + 2 + 1); // this also matches `some_file.txt`
@@ -591,7 +598,7 @@ mod tests {
     #[test]
     fn match_case() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/a/a?/a*.txt";
+        let pattern = "test-files/c-simple/a/a?/a*.txt";
 
         // default is case_sensitive(true)
         let builder = Builder::new(pattern).build(root)?;
@@ -609,7 +616,7 @@ mod tests {
     #[test]
     fn match_filter_entry() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/**/*.txt";
+        let pattern = "test-files/c-simple/**/*.txt";
 
         let builder = Builder::new(pattern).build(root)?;
         let paths: Vec<_> = builder
@@ -625,7 +632,7 @@ mod tests {
     #[test]
     fn match_filter() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/**/*.txt";
+        let pattern = "test-files/c-simple/**/*.txt";
 
         // this is slower than filter_entry since it matches all hidden paths
         let builder = Builder::new(pattern).build(root)?;
@@ -642,9 +649,9 @@ mod tests {
     #[test]
     fn match_with_glob() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/**/*.txt";
+        let pattern = "test-files/c-simple/**/*.txt";
 
-        let glob = Builder::new("**/test-files/a/a[0]/**").build_glob()?;
+        let glob = Builder::new("**/test-files/c-simple/a/a[0]/**").build_glob()?;
         let paths: Vec<_> = Builder::new(pattern)
             .build(root)?
             .into_iter()
@@ -660,7 +667,7 @@ mod tests {
     #[test]
     fn match_with_glob_all() -> Result<(), String> {
         let root = env!("CARGO_MANIFEST_DIR");
-        let pattern = "test-files/**/*.*";
+        let pattern = "test-files/c-simple/**/*.*";
 
         // build_glob creates a ["**/pattern", "pattern"] glob such that the user two separate
         // patterns when scanning for files, e.g., using "*.txt" (which would need "**/*.txt"
@@ -686,6 +693,25 @@ mod tests {
     fn match_flavours() -> Result<(), String> {
         // TODO: implememnt tests for different relative pattern styles
         // TODO: also provide failing tests for relative parts in the rest/remainder glob
+        Ok(())
+    }
+
+    #[test]
+    fn filter_entry_with_glob() -> Result<(), String> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let pattern = "test-files/c-simple/**/*.txt";
+
+        // the following pattern should match all hidden files and folders
+        let glob = Builder::new(".*").build_glob_set()?;
+
+        let paths: Vec<_> = Builder::new(pattern)
+            .build(root)?
+            .into_iter()
+            .filter_entry(|e| !glob.is_match(e))
+            .flatten()
+            .collect();
+
+        log_paths_and_assert(&paths, 6 + 1);
         Ok(())
     }
 }

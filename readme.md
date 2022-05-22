@@ -43,29 +43,29 @@ Specifying these paths in a dedicated configuration file allows to resolve the p
 
 ### Example: A simple match.
 
-The following example uses the files stored in the `test-files` folder, we're trying to match all the `.txt` files using the glob `test-files/**/*.txt` (where `test-files` is the only relative path component).
+The following example uses the files stored in the `test-files/c-simple` folder, we're trying to match all the `.txt` files using the glob `test-files/c-simple/**/*.txt` (where `test-files/c-simple` is the only relative path component).
 
 ```rust
 
 /*
     Example files:
-    globmatch/test-files/.hidden
-    globmatch/test-files/.hidden/h_1.txt
-    globmatch/test-files/.hidden/h_0.txt
-    globmatch/test-files/a/a2/a2_0.txt
-    globmatch/test-files/a/a0/a0_0.txt
-    globmatch/test-files/a/a0/a0_1.txt
-    globmatch/test-files/a/a0/A0_3.txt
-    globmatch/test-files/a/a0/a0_2.md
-    globmatch/test-files/a/a1/a1_0.txt
-    globmatch/test-files/some_file.txt
-    globmatch/test-files/b/b_0.txt
+    globmatch/test-files/c-simple/.hidden
+    globmatch/test-files/c-simple/.hidden/h_1.txt
+    globmatch/test-files/c-simple/.hidden/h_0.txt
+    globmatch/test-files/c-simple/a/a2/a2_0.txt
+    globmatch/test-files/c-simple/a/a0/a0_0.txt
+    globmatch/test-files/c-simple/a/a0/a0_1.txt
+    globmatch/test-files/c-simple/a/a0/A0_3.txt
+    globmatch/test-files/c-simple/a/a0/a0_2.md
+    globmatch/test-files/c-simple/a/a1/a1_0.txt
+    globmatch/test-files/c-simple/some_file.txt
+    globmatch/test-files/c-simple/b/b_0.txt
  */
 
 use globmatch;
 
 fn example_a() -> Result<(), String> {
-    let builder = globmatch::Builder::new("test-files/**/*.txt")
+    let builder = globmatch::Builder::new("test-files/c-simple/**/*.txt")
         .build(env!("CARGO_MANIFEST_DIR"))?;
 
     let paths: Vec<_> = builder.into_iter()
@@ -99,7 +99,7 @@ use globmatch;
 
 fn example_b() -> Result<(), String> {
     let root = env!("CARGO_MANIFEST_DIR");
-    let pattern = "test-files/**/[ah]*.txt";
+    let pattern = "test-files/c-simple/**/[ah]*.txt";
 
     let builder = globmatch::Builder::new(pattern)
         .case_sensitive(true)

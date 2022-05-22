@@ -227,19 +227,31 @@ mod tests {
             Ok(())
         }
         // notice how a relative path can result in an empty pattern, workaround implemented!
-        // err(tst("test-files", "../test-files", "test-files", ""))?;
-        tst("test-files/a", "../a", "test-files", "a")?;
+        // err(tst("test-files/c-simple", "../test-files/c-simple", "test-files/c-simple", ""))?;
+        tst("test-files/c-simple/a", "../a", "test-files/c-simple", "a")?;
 
         // if !cfg!(windows) {
-        tst("test-files", "*.txt", "test-files", "*.txt")?;
+        tst(
+            "test-files/c-simple",
+            "*.txt",
+            "test-files/c-simple",
+            "*.txt",
+        )?;
         // }
 
-        tst("test-files/a/a0", "../../../*.txt", "", "*.txt")?;
-        tst("test-files/a/a0", "a0_0.txt", "test-files/a/a0", "a0_0.txt")?;
+        tst("test-files/c-simple/a/a0", "../../../../*.txt", "", "*.txt")?;
+
         tst(
-            "test-files/a/a0",
+            "test-files/c-simple/a/a0",
+            "a0_0.txt",
+            "test-files/c-simple/a/a0",
+            "a0_0.txt",
+        )?;
+
+        tst(
+            "test-files/c-simple/a/a0",
             "../a0/a0_0.txt",
-            "test-files/a/a0",
+            "test-files/c-simple/a/a0",
             "a0_0.txt",
         )?;
         Ok(())
