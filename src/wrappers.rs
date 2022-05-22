@@ -27,7 +27,7 @@
 //! # fn example_usecase() -> Result<(), String> {
 //! let root = env!("CARGO_MANIFEST_DIR");
 //! let patterns = vec![
-//!     "test-files/c-simple/**/a*.txt",
+//!     "test-files/c-simple/**/[aA]*.txt",
 //!     "test-files/c-simple/**/*.md",
 //! ];
 //!
@@ -38,8 +38,8 @@
 //! ]);
 //!
 //! let candidates = globmatch::wrappers::build_matchers(&patterns, &root)?;
-//! let filter_pre = globmatch::wrappers::build_glob_set(&filter_entry, true)?;
-//! let filter_post = globmatch::wrappers::build_glob_set(&filter_post, true)?;
+//! let filter_pre = globmatch::wrappers::build_glob_set(&filter_entry, false)?;
+//! let filter_post = globmatch::wrappers::build_glob_set(&filter_post, false)?;
 //! let (paths, filtered) = globmatch::wrappers::match_paths(candidates, filter_pre, filter_post);
 //!
 //! /*
@@ -47,6 +47,7 @@
 //!     "/test-files/c-simple/a/a2/a2_0.txt"
 //! ];
 //! filtered = [
+//!     "/test-files/c-simple/a/a0/A3_0.txt",
 //!     "/test-files/c-simple/a/a0/a0_0.txt",
 //!     "/test-files/c-simple/a/a0/a0_1.txt",
 //!     "/test-files/c-simple/a/a0/a0_2.md",
@@ -55,7 +56,7 @@
 //! */
 //!
 //! assert_eq!(1, paths.len());
-//! assert_eq!(4, filtered.len());
+//! assert_eq!(5, filtered.len());
 //! # Ok(())
 //! # }
 //! # example_usecase().unwrap();
@@ -294,7 +295,7 @@ mod tests {
 
         let root = env!("CARGO_MANIFEST_DIR");
         let patterns = vec![
-            "test-files/c-simple/**/a*.txt",
+            "test-files/c-simple/**/[aA]*.txt",
             "test-files/c-simple/**/*.md",
         ];
         let filter_entry = Some(vec![".*"]);
@@ -317,6 +318,7 @@ mod tests {
         //     "/test-files/c-simple/a/a2/a2_0.txt"
         // ];
         // filtered = [
+        //     "/test-files/c-simple/a/a0/A3_0.txt",
         //     "/test-files/c-simple/a/a0/a0_0.txt",
         //     "/test-files/c-simple/a/a0/a0_1.txt",
         //     "/test-files/c-simple/a/a0/a0_2.md",
@@ -324,7 +326,7 @@ mod tests {
         // ];
 
         assert_eq!(1, paths.len());
-        assert_eq!(4, filtered.len());
+        assert_eq!(5, filtered.len());
         Ok(())
     }
 }
