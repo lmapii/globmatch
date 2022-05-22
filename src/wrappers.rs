@@ -305,8 +305,8 @@ mod tests {
         ]);
 
         let candidates = build_matchers(&patterns, &root)?;
-        let filter_pre = build_glob_set(&filter_entry, true)?;
-        let filter_post = build_glob_set(&filter_post, true)?;
+        let filter_pre = build_glob_set(&filter_entry, !cfg!(windows))?;
+        let filter_post = build_glob_set(&filter_post, !cfg!(windows))?;
 
         let (paths, filtered) = match_paths(candidates, filter_pre, filter_post);
 
