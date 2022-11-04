@@ -161,9 +161,9 @@ pub fn build_glob_set<'a>(
 ///
 /// The optional `filter_post` is used to apply a filter *after* matching the paths.
 pub fn match_paths<P>(
-    candidates: Vec<Matcher<P>>,
-    filter_entry: Option<Vec<GlobSet>>,
-    filter_post: Option<Vec<GlobSet>>,
+    candidates: Vec<Matcher<'_, P>>,
+    filter_entry: Option<Vec<GlobSet<'_>>>,
+    filter_post: Option<Vec<GlobSet<'_>>>,
 ) -> (Vec<path::PathBuf>, Vec<path::PathBuf>)
 where
     P: AsRef<path::Path>,
@@ -305,7 +305,7 @@ mod tests {
             "test-files/c-simple/**/a0/*.*",
         ]);
 
-        let candidates = build_matchers(&patterns, &root)?;
+        let candidates = build_matchers(&patterns, root)?;
         let filter_pre = build_glob_set(&filter_entry, !cfg!(windows))?;
         let filter_post = build_glob_set(&filter_post, !cfg!(windows))?;
 

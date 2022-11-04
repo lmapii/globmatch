@@ -182,6 +182,7 @@ const REQUIRE_PATHSEP: bool = true;
 /// `path/to/file.txt`. Use `**` to match across directory boundaries.
 ///
 /// The lifetime `'a` refers to the lifetime of the glob string.
+#[derive(Debug)]
 pub struct Builder<'a> {
     glob: &'a str,
     case_sensitive: bool,
@@ -321,6 +322,7 @@ impl<'a> Builder<'a> {
 ///
 /// This type exists such that [`Builder::build`] can return a result type (whereas `into_iter`
 /// cannot). Notice that `iter()` is not implemented due to the use of references.
+#[derive(Debug)]
 pub struct Matcher<'a, P>
 where
     P: AsRef<path::Path>,
@@ -390,6 +392,7 @@ where
 ///
 /// This type is created by [`Builder::build_glob`] for a single glob on which no transformations
 /// or path resolutions have been performed.
+#[derive(Debug)]
 pub struct Glob<'a> {
     glob: &'a str,
     pub matcher: globset::GlobMatcher,
@@ -415,6 +418,7 @@ impl<'a> Glob<'a> {
 /// This type is created by [`Builder::build_glob_set`] (refer to the function documentation). The
 /// matcher stores two globs created from the original pattern as `[**/pattern, pattern]` for
 /// easy matching on multiple paths.
+#[derive(Debug)]
 pub struct GlobSet<'a> {
     glob: &'a str,
     pub matcher: globset::GlobSet,

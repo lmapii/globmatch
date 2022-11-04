@@ -7,6 +7,7 @@ use crate::error::Error;
 /// This iterator iterates over all paths recursively without any filter. Use
 /// [`IterAll::filter_entry`] to create a more efficient [`IterFilter`] out of this iterator,
 /// e.g., do not walk any hidden folders such as `.git`.
+#[derive(Debug)]
 pub struct IterAll<P>
 where
     P: AsRef<path::Path>,
@@ -111,6 +112,7 @@ where
 ///
 /// This iterator iterates over all paths recursively but applies the configured predicate
 /// to all paths.
+#[derive(Debug)]
 pub struct IterFilter<I, P, PreDir>
 where
     PreDir: FnMut(&walkdir::DirEntry) -> bool,
