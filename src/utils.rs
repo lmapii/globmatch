@@ -212,7 +212,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 match exp_root {
                     "" => "".to_string(),
-                    p => format!("/{}", p),
+                    p => format!("/{p}"),
                 }
             );
             let exp_root = path::PathBuf::from(exp_root)

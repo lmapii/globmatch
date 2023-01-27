@@ -688,7 +688,7 @@ mod tests {
             .flatten()
             .filter(|p| {
                 let is_match = glob.is_match(p);
-                println!("is match: {:?} - {}", p, is_match);
+                println!("is match: {p:?} - {is_match}");
                 is_match
             })
             .collect();
