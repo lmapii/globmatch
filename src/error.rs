@@ -6,6 +6,7 @@ use std::io;
 pub struct Error(String);
 
 impl Error {
+    /// Creates a new error string.
     pub fn new(err: &str) -> Error {
         Error(err.to_string())
     }
@@ -25,16 +26,15 @@ impl From<walkdir::Error> for Error {
             if let Some(inner) = item.io_error() {
                 return match inner.kind() {
                     io::ErrorKind::InvalidData => {
-                        Error(format!("{}: Invalid data encountered: {}", common, inner))
+                        Error(format!("{common}: Invalid data encountered: {inner}"))
                     }
                     io::ErrorKind::PermissionDenied => Error(format!(
-                        "{}: Missing permissions to read entry: {}",
-                        common, inner
+                        "{common}: Missing permissions to read entry: {inner}"
                     )),
-                    _ => Error(format!("{}: Unexpected error occurred: {}", common, inner)),
+                    _ => Error(format!("{common}: Unexpected error occurred: {inner}")),
                 };
             }
-            return Error(format!("{}: Unknown error occurred", common));
+            return Error(format!("{common}: Unknown error occurred"));
         }
         Error("<unknown-path>: Unknown error occurred".to_string())
     }

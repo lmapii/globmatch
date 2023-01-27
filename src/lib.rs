@@ -1,3 +1,5 @@
+#![warn(missing_debug_implementations, rust_2018_idioms, missing_docs)]
+
 //! This crate provides cross platform matching for globs with relative path prefixes.
 //!
 //! For CLI utilities it can be a common pattern to operate on a set of files. Such a set of files
@@ -201,7 +203,7 @@ impl<'a> Builder<'a> {
 
     /// Toggle whether the glob matches case sensitive or not.
     ///
-    /// The default setting is to match case **sensitive***.
+    /// The default setting is to match case **sensitive**.
     pub fn case_sensitive(&mut self, yes: bool) -> &mut Builder<'a> {
         self.case_sensitive = yes;
         self
@@ -395,6 +397,7 @@ where
 #[derive(Debug)]
 pub struct Glob<'a> {
     glob: &'a str,
+    /// Associated matcher.
     pub matcher: globset::GlobMatcher,
 }
 
@@ -421,6 +424,7 @@ impl<'a> Glob<'a> {
 #[derive(Debug)]
 pub struct GlobSet<'a> {
     glob: &'a str,
+    /// Associated matcher.
     pub matcher: globset::GlobSet,
 }
 
