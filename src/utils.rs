@@ -17,6 +17,7 @@ pub fn resolve_root<'a, P>(
 where
     P: AsRef<path::Path>,
 {
+    // TODO: is there such a thing as Cow for Path?
     let mut root = path::PathBuf::from(prefix.as_ref());
     let mut rest = path::PathBuf::new();
 
@@ -31,7 +32,7 @@ where
     if path::Path::new(pattern).is_absolute() {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            format!("'{}' is an absolute path", pattern),
+            format!("'{pattern}' is an absolute path"),
         ));
     }
 
@@ -211,7 +212,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 match exp_root {
                     "" => "".to_string(),
-                    p => format!("/{}", p),
+                    p => format!("/{p}"),
                 }
             );
             let exp_root = path::PathBuf::from(exp_root)
