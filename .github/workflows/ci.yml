@@ -66,6 +66,11 @@ jobs:
         # - { build: 'windows-i686-mingw',    os: 'windows-latest', target: 'i686-pc-windows-gnu',           cross: false, rust: stable }
     steps:
       - uses: actions/checkout@v2
+      # Rustup update can fail on windows since it tries to replace its binary. This is not really
+      # needed anyhow. https://github.com/rust-lang/rustup/issues/3029
+      - name: Disable rustup self-update
+        shell: bash
+        run: rustup set auto-self-update disable
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
