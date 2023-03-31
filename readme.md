@@ -19,7 +19,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-globmatch = "0.1"
+globmatch = "0.2"
 ```
 
 ## Examples and concept
