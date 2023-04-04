@@ -17,7 +17,7 @@ jobs:
 
   rustfmt:
     name: rustfmt
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -29,7 +29,7 @@ jobs:
     - run: cargo fmt --all -- --check
 
   clippy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -50,7 +50,7 @@ jobs:
         tuple:
         # see https://doc.rust-lang.org/nightly/rustc/platform-support.html for platform support / tiers
         # see https://github.com/cross-rs/cross#supported-targets for supported targets in cross
-          - { build: 'linux-x86_64-pinned',   os: 'ubuntu-18.04',   target: 'x86_64-unknown-linux-gnu',      cross: false, rust: 1.68.2 }
+          - { build: 'linux-x86_64-pinned',   os: 'ubuntu-22.04',   target: 'x86_64-unknown-linux-gnu',      cross: false, rust: 1.68.2 }
           - { build: 'windows-x86_64-pinned', os: 'windows-2019',   target: 'x86_64-pc-windows-msvc',        cross: false, rust: 1.68.2 }
           - { build: 'macos-x86_64-pinned',   os: 'macos-latest',   target: 'x86_64-apple-darwin',           cross: false, rust: 1.68.2 }
           - { build: 'linux-x86_64',          os: 'ubuntu-latest',  target: 'x86_64-unknown-linux-gnu',      cross: false, rust: stable }
@@ -93,7 +93,7 @@ jobs:
   docs:
     name: Docs
     needs: [build_and_test]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
