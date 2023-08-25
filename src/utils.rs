@@ -141,7 +141,7 @@ where
             .unwrap_or(false)
     });
 
-    !matches!(has_hidden, None)
+    has_hidden.is_some()
 }
 
 #[cfg(test)]
