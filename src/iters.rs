@@ -141,5 +141,3 @@ where
         }
     }
 }
-
-// TODO: implement recursive filter_entry?
