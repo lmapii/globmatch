@@ -40,6 +40,8 @@ jobs:
     name: ${{ matrix.tuple.build }}
     needs: [rustfmt, clippy]
     runs-on: ${{ matrix.tuple.os }}
+    env:
+      CARGO: cargo
     strategy:
       fail-fast: false
       matrix:
