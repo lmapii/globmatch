@@ -1,6 +1,6 @@
 [package]
 name = "globmatch"
-version = "0.2.5"
+version = "0.3.0"
 authors = ["Martin Lampacher <lmapii@gmail.com>"]
 description = """
 Cross platform glob matching with relative path components, against
@@ -21,7 +21,7 @@ bench = false
 [dependencies]
 globset = "0.4"
 walkdir = "2"
-log = "0.4"
 
 [dev-dependencies]
 doc-comment = "0.3"
+log = "0.4"

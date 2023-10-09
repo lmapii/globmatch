@@ -218,30 +218,8 @@ where
     paths.sort_unstable();
     paths.dedup();
 
-    log::debug!(
-        "paths \n{}",
-        paths
-            .iter()
-            .map(|p| format!("{}", p.canonicalize().unwrap().to_string_lossy()))
-            // .map(|p| format!("{}", p.to_string_lossy()))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-
     filtered.sort_unstable();
     filtered.dedup();
-
-    if !filtered.is_empty() {
-        log::debug!(
-            "filtered \n{}",
-            filtered
-                .iter()
-                .map(|p| format!("{}", p.canonicalize().unwrap().to_string_lossy()))
-                // .map(|p| format!("{}", p.to_string_lossy()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-    }
 
     (paths, filtered)
 }
