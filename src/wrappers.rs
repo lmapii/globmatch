@@ -91,7 +91,7 @@ fn extract_patterns<T>(candidates: Vec<Result<T, String>>) -> Result<Vec<T>, Str
 /// Builds a set of [`Matcher`]s for the list of `globs` relative to `root`.
 ///
 /// This function creates multiple [`Matcher`]s by calling the [`Builder::build`] for each of the
-/// provided globs. It then checks if any failures have occured while building the [`Matcher`]
+/// provided globs. It then checks if any failures have occurred while building the [`Matcher`]
 /// instances; if for any of the provided globs the build fails an error is returned.
 ///
 /// # Errors
@@ -120,7 +120,7 @@ where
 /// Builds a set of [`GlobSet`]s for the list of provided `paths`.
 ///
 /// This function creates multiple [`GlobSet`]s by calling the [`Builder::build_glob_set`] function
-/// for each provided glob. It then checks if any failures have occured while building the
+/// for each provided glob. It then checks if any failures have occurred while building the
 /// [`GlobSet`] instances; if for any of the provided paths the build fails an error is returned.
 ///
 /// # Errors
