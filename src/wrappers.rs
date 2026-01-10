@@ -67,13 +67,7 @@ use std::path;
 use crate::{utils, Builder, GlobSet, Matcher};
 
 fn extract_patterns<T>(candidates: Vec<Result<T, String>>) -> Result<Vec<T>, String> {
-    let failures: Vec<_> = candidates
-        .iter()
-        .filter_map(|f| match f {
-            Ok(_) => None,
-            Err(e) => Some(e),
-        })
-        .collect();
+    let failures: Vec<_> = candidates.iter().filter_map(|f| f.as_ref().err()).collect();
 
     if !failures.is_empty() {
         return Err(format!(

@@ -123,10 +123,10 @@
 //! to further limit the files (e.g., based on a global blacklist).
 //!
 //! - [`Builder::build_glob`] to create a single [`Glob`] (caution: the builder only checks
-//!    that the pattern is not empty, but allows absolute paths).
+//!   that the pattern is not empty, but allows absolute paths).
 //! - [`Builder::build_glob_set`] to create a [`Glob`] matcher that contains two globs
 //!   `[glob, **/glob]` out of the specified `glob` parameter of [`Builder::new`]. The pattern
-//!    must not be an absolute path.
+//!   must not be an absolute path.
 //!
 //! ```
 //! use globmatch;
@@ -699,7 +699,7 @@ mod tests {
 
     #[test]
     fn match_flavours() -> Result<(), String> {
-        // TODO: implememnt tests for different relative pattern styles
+        // TODO: implement tests for different relative pattern styles
         // TODO: also provide failing tests for relative parts in the rest/remainder glob
         Ok(())
     }
